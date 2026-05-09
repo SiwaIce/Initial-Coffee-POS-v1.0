@@ -122,6 +122,28 @@ function renderShopSettings() {
 
   html += '</div>'; /* end card */
 
+/* Quick Cash */
+  html += '<div class="card mb-16">';
+  html += '<div class="card-header"><div class="card-title">💵 ปุ่มเงินด่วน (หน้าจ่ายเงิน)</div></div>';
+
+  html += '<div class="form-group">';
+  html += '<label class="form-label">จำนวนเงิน (คั่นด้วยเครื่องหมาย , )</label>';
+  var qcAmounts = (cfg.quickCashAmounts || [20, 50, 100, 500, 1000]).join(', ');
+  html += '<input type="text" id="cfgQuickCash" value="' + sanitize(qcAmounts) + '" placeholder="20, 50, 100, 500, 1000">';
+  html += '<div class="form-hint">ตัวอย่าง: 20, 50, 100, 500, 1000 — ปุ่ม "พอดี" จะแสดงอัตโนมัติ</div>';
+  html += '</div>';
+
+  /* Preview */
+  html += '<div class="flex flex-wrap gap-6">';
+  html += '<span class="btn btn-success btn-sm" style="pointer-events:none;">💰 พอดี ฿XX</span>';
+  var previewAmts = cfg.quickCashAmounts || [20, 50, 100, 500, 1000];
+  for (var qa = 0; qa < previewAmts.length; qa++) {
+    html += '<span class="btn btn-secondary btn-sm" style="pointer-events:none;">' + formatMoneySign(previewAmts[qa]) + '</span>';
+  }
+  html += '</div>';
+
+  html += '</div>'; /* end card */
+
   /* Receipt */
   html += '<div class="card mb-16">';
   html += '<div class="card-header"><div class="card-title">🧾 ใบเสร็จ</div></div>';
@@ -177,6 +199,17 @@ function saveShopSettings() {
   cfg.serviceChargeRate = parseFloat(($('cfgSCRate') || {}).value) || 10;
   cfg.receiptWidth = ($('cfgReceiptWidth') || {}).value || '80mm';
   cfg.receiptFooter = ($('cfgReceiptFooter') || {}).value || 'ขอบคุณที่ใช้บริการ';
+
+/* Quick Cash */
+  var qcRaw = ($('cfgQuickCash') || {}).value || '';
+  var qcParts = qcRaw.split(',');
+  var qcArr = [];
+  for (var qc = 0; qc < qcParts.length; qc++) {
+    var n = parseInt(qcParts[qc].trim(), 10);
+    if (n > 0) qcArr.push(n);
+  }
+  if (qcArr.length === 0) qcArr = [20, 50, 100, 500, 1000];
+  cfg.quickCashAmounts = qcArr;
 
   ST.saveConfig(cfg);
   applyShopName();

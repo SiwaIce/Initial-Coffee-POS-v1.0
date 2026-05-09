@@ -85,12 +85,7 @@ function renderPOSView() {
 
   main.innerHTML = html;
 
-  /* Auto focus search on PC */
-  if (!APP.isMobile) {
-    var searchEl = $('posSearch');
-    if (searchEl) searchEl.focus();
-  }
-}
+/* ไม่ auto focus — ให้ user กดเองเมื่อต้องการค้นหา */}
 
 /* ============================================
    RECENT ORDERS STRIP

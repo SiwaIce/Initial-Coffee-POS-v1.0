@@ -171,11 +171,14 @@ function modalAddToCart(menuItem) {
     html += '</div>';
   }
 
-  /* === Toppings === */
+  /* === Toppings (Collapsible) === */
   if (toppings.length > 0) {
     html += '<div class="form-group">';
-    html += '<label class="form-label">🧁 Topping</label>';
-    html += '<div class="topping-list" id="toppingList">';
+    html += '<div class="topping-toggle" onclick="toggleToppingSection()">';
+    html += '<label class="form-label" style="margin-bottom:0;cursor:pointer;">🧁 Topping <span class="text-muted fs-sm">(ไม่บังคับ)</span></label>';
+    html += '<span id="toppingArrow" class="topping-arrow">▸</span>';
+    html += '</div>';
+    html += '<div class="topping-list" id="toppingList" style="display:none;margin-top:8px;">';
     for (var t = 0; t < toppings.length; t++) {
       var tp = toppings[t];
       html += '<div class="topping-item" data-id="' + sanitize(tp.id) + '" data-price="' + tp.price + '" onclick="toggleTopping(this)">';
@@ -272,6 +275,22 @@ function toggleTopping(el) {
 
 /* Qty +/- */
 var _modalCartQty = 1;
+
+/* Toggle topping section show/hide */
+function toggleToppingSection() {
+  var list = $('toppingList');
+  var arrow = $('toppingArrow');
+  if (!list) return;
+
+  if (list.style.display === 'none') {
+    list.style.display = '';
+    if (arrow) arrow.textContent = '▾';
+  } else {
+    list.style.display = 'none';
+    if (arrow) arrow.textContent = '▸';
+  }
+  vibrate(20);
+}
 
 function modalCartQty(delta) {
   _modalCartQty = clamp(_modalCartQty + delta, 1, 99);
@@ -482,22 +501,22 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
   html += '<input type="number" id="payReceived" inputmode="numeric" value="" placeholder="0" oninput="calcChange()" style="font-size:24px;text-align:center;font-weight:800;">';
   html += '</div>';
 
-  /* Quick cash buttons */
-  html += '<div class="flex flex-wrap gap-8 mb-16">';
-  var quickAmounts = [grandTotal, 100, 500, 1000];
-  if (grandTotal > 1000) quickAmounts.push(2000);
-  var seen = {};
-  var uniq = [];
-  for (var q = 0; q < quickAmounts.length; q++) {
-    if (!seen[quickAmounts[q]] && quickAmounts[q] > 0) {
-      seen[quickAmounts[q]] = true;
-      uniq.push(quickAmounts[q]);
-    }
+/* Quick cash buttons (from config) */
+  html += '<div class="flex flex-wrap gap-6 mb-16">';
+
+  /* "พอดี" button always first */
+  html += '<button class="btn btn-success btn-sm" onclick="setPayReceived(' + grandTotal + ')">💰 พอดี ' + formatMoneySign(grandTotal) + '</button>';
+
+  /* Custom amounts from config */
+  var cfg2 = ST.getConfig();
+  var quickList = cfg2.quickCashAmounts || [20, 50, 100, 500, 1000];
+
+  for (var qa = 0; qa < quickList.length; qa++) {
+    var amt = quickList[qa];
+    if (amt <= 0 || amt === grandTotal) continue;
+    html += '<button class="btn btn-secondary btn-sm" onclick="setPayReceived(' + amt + ')">' + formatMoneySign(amt) + '</button>';
   }
-  for (var u = 0; u < uniq.length; u++) {
-    var label = u === 0 ? 'พอดี ' + formatMoneySign(uniq[u]) : formatMoneySign(uniq[u]);
-    html += '<button class="btn btn-secondary btn-sm" onclick="setPayReceived(' + uniq[u] + ')">' + label + '</button>';
-  }
+
   html += '</div>';
 
   /* Change */

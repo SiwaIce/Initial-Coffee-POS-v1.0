@@ -1606,6 +1606,26 @@ tr:hover td { background: var(--glass); }
   color: var(--accent);
   line-height: 1.4;
 }
+/* Topping toggle header */
+.topping-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+}
+.topping-toggle:hover {
+  border-color: var(--accent);
+}
+.topping-arrow {
+  font-size: 14px;
+  color: var(--text-muted);
+  transition: transform var(--transition);
+}
 
 /* ============================================
    RESPONSIVE

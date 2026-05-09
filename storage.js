@@ -89,6 +89,7 @@ ST.getConfig = function() {
     orderPrefix: '#',
     lastOrderDate: '',
     lastOrderNumber: 0
+    quickCashAmounts: [20, 50, 100, 500, 1000]
   };
   var cfg = ST.getObj('config', {});
   for (var k in defaults) {
