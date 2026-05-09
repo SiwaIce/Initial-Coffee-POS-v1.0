@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0f0f1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Coffee POS</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ===== SPLASH SCREEN ===== -->
+<div id="splash" class="splash">
+  <div class="splash-content">
+    <div class="splash-icon">☕</div>
+    <div class="splash-title">Coffee POS</div>
+    <div class="splash-sub">Loading...</div>
+    <div class="splash-bar"><div class="splash-bar-fill"></div></div>
+  </div>
+</div>
+
+<!-- ===== MAIN APP ===== -->
+<div id="app" class="app" style="display:none;">
+
+  <!-- === TOP BAR === -->
+  <header id="topBar" class="top-bar">
+    <div class="top-bar-left">
+      <button id="btnSidebar" class="btn-icon" onclick="toggleSidebar()">
+        <span class="hamburger-icon">☰</span>
+      </button>
+      <div class="brand">
+        <span class="brand-icon">☕</span>
+        <span id="shopName" class="brand-name">Coffee POS</span>
+      </div>
+    </div>
+    <div class="top-bar-right">
+      <span id="topClock" class="top-clock"></span>
+      <span id="topStaff" class="top-staff"></span>
+      <button class="btn-icon" onclick="toggleTheme()" title="Toggle Theme">
+        <span id="themeIcon">🌙</span>
+      </button>
+      <button class="btn-icon" onclick="showSync()" title="Sync">
+        <span>🔄</span>
+      </button>
+      <button class="btn-icon" onclick="nav('admin')" title="Settings">
+        <span>⚙️</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- === LAYOUT: SIDEBAR + MAIN === -->
+  <div class="layout">
+
+    <!-- SIDEBAR (PC) -->
+    <nav id="sidebar" class="sidebar">
+      <div class="sidebar-menu">
+        <button class="nav-item active" data-view="pos" onclick="nav('pos')">
+          <span class="nav-icon">🛒</span>
+          <span class="nav-label">POS</span>
+        </button>
+        <button class="nav-item" data-view="menu" onclick="nav('menu')">
+          <span class="nav-icon">📋</span>
+          <span class="nav-label">เมนู</span>
+        </button>
+        <button class="nav-item" data-view="orders" onclick="nav('orders')">
+          <span class="nav-icon">📜</span>
+          <span class="nav-label">ออเดอร์</span>
+        </button>
+        <button class="nav-item" data-view="report" onclick="nav('report')">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">รายงาน</span>
+        </button>
+        <button class="nav-item" data-view="stock" onclick="nav('stock')">
+          <span class="nav-icon">📦</span>
+          <span class="nav-label">Stock</span>
+        </button>
+        <button class="nav-item" data-view="admin" onclick="nav('admin')">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-label">ตั้งค่า</span>
+        </button>
+      </div>
+      <div class="sidebar-footer">
+        <div id="sidebarUser" class="sidebar-user"></div>
+        <button id="btnAuth" class="btn-sm btn-outline" onclick="handleAuth()">
+          <span>🔐</span> <span id="authLabel">Login</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- SIDEBAR OVERLAY (Mobile) -->
+    <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- MAIN CONTENT -->
+    <main id="mainContent" class="main-content">
+      <!-- views render here -->
+    </main>
+
+  </div>
+
+  <!-- === BOTTOM NAV (Mobile) === -->
+  <nav id="bottomNav" class="bottom-nav">
+    <button class="bnav-item active" data-view="pos" onclick="nav('pos')">
+      <span class="bnav-icon">🛒</span>
+      <span class="bnav-label">POS</span>
+    </button>
+    <button class="bnav-item" data-view="menu" onclick="nav('menu')">
+      <span class="bnav-icon">📋</span>
+      <span class="bnav-label">เมนู</span>
+    </button>
+    <button class="bnav-item" data-view="orders" onclick="nav('orders')">
+      <span class="bnav-icon">📜</span>
+      <span class="bnav-label">ออเดอร์</span>
+    </button>
+    <button class="bnav-item" data-view="report" onclick="nav('report')">
+      <span class="bnav-icon">📊</span>
+      <span class="bnav-label">รายงาน</span>
+    </button>
+    <button class="bnav-item" data-view="admin" onclick="nav('admin')">
+      <span class="bnav-icon">⚙️</span>
+      <span class="bnav-label">เพิ่มเติม</span>
+    </button>
+  </nav>
+
+</div>
+
+<!-- ===== TOAST ===== -->
+<div id="toastContainer" class="toast-container"></div>
+
+<!-- ===== MODAL LAYER ===== -->
+<div id="modalOverlay" class="modal-overlay" onclick="closeMForce()"></div>
+<div id="modalBox" class="modal-box">
+  <div class="modal-header">
+    <h3 id="modalTitle" class="modal-title"></h3>
+    <button class="modal-close" onclick="closeMForce()">&times;</button>
+  </div>
+  <div id="modalBody" class="modal-body"></div>
+  <div id="modalFooter" class="modal-footer"></div>
+</div>
+
+<!-- ===== RECEIPT PRINT (Hidden) ===== -->
+<div id="receiptPrint" class="receipt-print"></div>
+
+<!-- ===== JS FILES ===== -->
+<script src="utils.js"></script>
+<script src="storage.js"></script>
+<script src="modals.js"></script>
+<script src="views-pos.js"></script>
+<script src="views-menu.js"></script>
+<script src="views-orders.js"></script>
+<script src="views-report.js"></script>
+<script src="views-stock.js"></script>
+<script src="admin.js"></script>
+<script src="export.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
