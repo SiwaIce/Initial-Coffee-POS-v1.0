@@ -31,6 +31,7 @@ function renderMenuView() {
   html += '<div class="cat-tabs mb-16" id="menuSubTabs">';
   html += menuSubTab('menu', '🍽️ เมนู');
   html += menuSubTab('category', '📁 หมวดหมู่');
+  html += menuSubTab('options', '🍯 ตัวเลือก');
   html += menuSubTab('topping', '🧁 Topping');
   html += menuSubTab('size', '📏 Size');
   html += '</div>';
@@ -71,6 +72,7 @@ function renderMenuTabContent() {
   switch (MENUVIEW.tab) {
     case 'menu': return renderMenuList();
     case 'category': return renderCategoryList();
+        case 'options': return renderOptionsTab();
     case 'topping': return renderToppingList();
     case 'size': return renderSizeList();
     default: return '';
@@ -202,6 +204,17 @@ function renderMenuManageCard(item, cats) {
   if (item.cost > 0) {
     html += '<div class="text-muted fs-sm mt-8">ต้นทุน: ' + formatMoneySign(item.cost) + ' | กำไร: ' + formatMoneySign(basePrice - item.cost) + '</div>';
   }
+
+/* Options badges */
+  html += '<div class="flex gap-4 mt-4 flex-wrap">';
+  if (item.allowDrinkType !== false) {
+    var dtCount = item.availableDrinkTypes ? item.availableDrinkTypes.length : ST.getDrinkTypes().length;
+    html += '<span class="badge badge-info" style="font-size:10px;">🔥 ' + dtCount + ' ประเภท</span>';
+  }
+  if (item.allowSweetLevel !== false) {
+    html += '<span class="badge badge-warning" style="font-size:10px;">🍯 เลือกหวาน</span>';
+  }
+  html += '</div>';
 
   html += '</div>'; /* end info */
   html += '</div>'; /* end top row */
@@ -487,6 +500,227 @@ function deleteSizeFromModal() {
     closeMForce();
     toast('ลบขนาดแล้ว', 'warning');
     switchMenuTab('size');
+  });
+}
+
+/* ============================================
+   TAB: OPTIONS (Sweet Level + Drink Type)
+   ============================================ */
+function renderOptionsTab() {
+  var html = '';
+
+  /* === DRINK TYPES === */
+  html += '<div class="card mb-16">';
+  html += '<div class="card-header">';
+  html += '<div class="card-title">🔥 ประเภทเครื่องดื่ม</div>';
+  html += '<button class="btn btn-primary btn-sm" onclick="modalEditDrinkType(null)">➕ เพิ่ม</button>';
+  html += '</div>';
+
+  var drinkTypes = ST.getDrinkTypes();
+  if (drinkTypes.length === 0) {
+    html += '<div class="text-muted text-center p-16">ยังไม่มีประเภท</div>';
+  } else {
+    for (var d = 0; d < drinkTypes.length; d++) {
+      var dt = drinkTypes[d];
+      html += '<div class="topping-manage-card" onclick="modalEditDrinkType(findById(ST.getDrinkTypes(),\'' + sanitize(dt.id) + '\'))">';
+      html += '<div class="flex-between" style="align-items:center;">';
+      html += '<div class="flex gap-8" style="align-items:center;">';
+      html += '<span style="font-size:24px;">' + (dt.emoji || '🔥') + '</span>';
+      html += '<div>';
+      html += '<div class="fw-600">' + sanitize(dt.name) + '</div>';
+      if (dt.addPrice > 0) {
+        html += '<div class="text-accent fs-sm">+' + formatMoneySign(dt.addPrice) + '</div>';
+      } else {
+        html += '<div class="text-muted fs-sm">ไม่มีราคาเพิ่ม</div>';
+      }
+      html += '</div></div>';
+      html += '<div class="flex gap-6" style="align-items:center;">';
+      html += dt.active !== false ? '<span class="badge badge-success">เปิด</span>' : '<span class="badge badge-danger">ปิด</span>';
+      html += '<span class="text-muted">✏️</span>';
+      html += '</div>';
+      html += '</div></div>';
+    }
+  }
+  html += '</div>';
+
+  /* === SWEET LEVELS === */
+  html += '<div class="card mb-16">';
+  html += '<div class="card-header">';
+  html += '<div class="card-title">🍯 ระดับความหวาน</div>';
+  html += '<button class="btn btn-primary btn-sm" onclick="modalEditSweetLevel(null)">➕ เพิ่ม</button>';
+  html += '</div>';
+
+  var sweetLevels = ST.getSweetLevels();
+  if (sweetLevels.length === 0) {
+    html += '<div class="text-muted text-center p-16">ยังไม่มีระดับหวาน</div>';
+  } else {
+    for (var s = 0; s < sweetLevels.length; s++) {
+      var sl = sweetLevels[s];
+      html += '<div class="topping-manage-card" onclick="modalEditSweetLevel(findById(ST.getSweetLevels(),\'' + sanitize(sl.id) + '\'))">';
+      html += '<div class="flex-between" style="align-items:center;">';
+      html += '<div class="flex gap-8" style="align-items:center;">';
+      html += '<span style="font-size:24px;">' + (sl.emoji || '🍯') + '</span>';
+      html += '<div>';
+      html += '<div class="fw-600">' + sanitize(sl.name) + '</div>';
+      if (sl.addPrice > 0) {
+        html += '<div class="text-accent fs-sm">+' + formatMoneySign(sl.addPrice) + '</div>';
+      }
+      html += '</div></div>';
+      html += '<div class="flex gap-6" style="align-items:center;">';
+      html += sl.active !== false ? '<span class="badge badge-success">เปิด</span>' : '<span class="badge badge-danger">ปิด</span>';
+      html += '<span class="text-muted">✏️</span>';
+      html += '</div>';
+      html += '</div></div>';
+    }
+  }
+  html += '</div>';
+
+  /* Note */
+  html += '<div class="card-glass p-16">';
+  html += '<div class="fw-600 mb-8">💡 วิธีใช้</div>';
+  html += '<div class="text-muted fs-sm" style="line-height:1.6;">';
+  html += '• แต่ละเมนูสามารถเปิด/ปิดตัวเลือกได้ในหน้า <b>แก้ไขเมนู</b><br>';
+  html += '• เมนูเบเกอรี่อาจปิด "ประเภทเครื่องดื่ม" และ "ระดับหวาน" ได้<br>';
+  html += '• ราคาเพิ่มจะบวกเข้ากับราคา Size อัตโนมัติ';
+  html += '</div>';
+  html += '</div>';
+
+  return html;
+}
+
+/* ============================================
+   MODAL: EDIT DRINK TYPE
+   ============================================ */
+function modalEditDrinkType(item) {
+  var isNew = !item;
+  var d = item || {};
+
+  var html = '';
+  html += '<div class="form-group">';
+  html += '<label class="form-label">ชื่อ *</label>';
+  html += '<input type="text" id="fDTName" value="' + sanitize(d.name || '') + '" placeholder="เช่น ร้อน, เย็น, ปั่น">';
+  html += '</div>';
+
+  html += '<div class="form-row">';
+  html += '<div class="form-group">';
+  html += '<label class="form-label">Emoji</label>';
+  html += '<input type="text" id="fDTEmoji" value="' + sanitize(d.emoji || '🔥') + '" style="font-size:24px;text-align:center;">';
+  html += '</div>';
+  html += '<div class="form-group">';
+  html += '<label class="form-label">ราคาเพิ่ม (฿)</label>';
+  html += '<input type="number" id="fDTPrice" value="' + (d.addPrice || '') + '" placeholder="0" inputmode="numeric">';
+  html += '</div>';
+  html += '</div>';
+
+  html += '<div class="form-group">';
+  html += '<label class="toggle-wrap" onclick="toggleToggle(this)">';
+  html += '<div class="toggle' + (d.active !== false ? ' on' : '') + '" id="fDTActive"></div>';
+  html += '<span>เปิดใช้งาน</span>';
+  html += '</label>';
+  html += '</div>';
+
+  html += '<input type="hidden" id="fDTId" value="' + sanitize(d.id || '') + '">';
+
+  var footer = '';
+  if (!isNew) footer += '<button class="btn btn-danger btn-sm" onclick="deleteDTFromModal()">🗑 ลบ</button>';
+  footer += '<button class="btn btn-secondary" onclick="closeMForce()">ยกเลิก</button>';
+  footer += '<button class="btn btn-primary" onclick="saveDTFromModal()">' + (isNew ? '➕ เพิ่ม' : '💾 บันทึก') + '</button>';
+
+  openModal(isNew ? '➕ เพิ่มประเภทเครื่องดื่ม' : '✏️ แก้ไขประเภท', html, footer);
+}
+
+function saveDTFromModal() {
+  var id = ($('fDTId') || {}).value;
+  var name = ($('fDTName') || {}).value.trim();
+  if (!name) { toast('กรุณาใส่ชื่อ', 'error'); return; }
+  var data = {
+    name: name,
+    emoji: ($('fDTEmoji') || {}).value || '🔥',
+    addPrice: parseFloat(($('fDTPrice') || {}).value) || 0,
+    active: hasClass($('fDTActive'), 'on')
+  };
+  if (id) { ST.updateDrinkType(id, data); toast('อัพเดตแล้ว', 'success'); }
+  else { ST.addDrinkType(data); toast('เพิ่มแล้ว', 'success'); }
+  closeMForce();
+  switchMenuTab('options');
+}
+
+function deleteDTFromModal() {
+  var id = ($('fDTId') || {}).value;
+  if (!id) return;
+  confirmDialog('ลบประเภทนี้?', function() {
+    ST.deleteDrinkType(id);
+    closeMForce();
+    toast('ลบแล้ว', 'warning');
+    switchMenuTab('options');
+  });
+}
+
+/* ============================================
+   MODAL: EDIT SWEET LEVEL
+   ============================================ */
+function modalEditSweetLevel(item) {
+  var isNew = !item;
+  var s = item || {};
+
+  var html = '';
+  html += '<div class="form-group">';
+  html += '<label class="form-label">ชื่อ *</label>';
+  html += '<input type="text" id="fSWName" value="' + sanitize(s.name || '') + '" placeholder="เช่น หวานน้อย">';
+  html += '</div>';
+
+  html += '<div class="form-row">';
+  html += '<div class="form-group">';
+  html += '<label class="form-label">Emoji</label>';
+  html += '<input type="text" id="fSWEmoji" value="' + sanitize(s.emoji || '🍯') + '" style="font-size:24px;text-align:center;">';
+  html += '</div>';
+  html += '<div class="form-group">';
+  html += '<label class="form-label">ราคาเพิ่ม (฿)</label>';
+  html += '<input type="number" id="fSWPrice" value="' + (s.addPrice || '') + '" placeholder="0" inputmode="numeric">';
+  html += '</div>';
+  html += '</div>';
+
+  html += '<div class="form-group">';
+  html += '<label class="toggle-wrap" onclick="toggleToggle(this)">';
+  html += '<div class="toggle' + (s.active !== false ? ' on' : '') + '" id="fSWActive"></div>';
+  html += '<span>เปิดใช้งาน</span>';
+  html += '</label>';
+  html += '</div>';
+
+  html += '<input type="hidden" id="fSWId" value="' + sanitize(s.id || '') + '">';
+
+  var footer = '';
+  if (!isNew) footer += '<button class="btn btn-danger btn-sm" onclick="deleteSWFromModal()">🗑 ลบ</button>';
+  footer += '<button class="btn btn-secondary" onclick="closeMForce()">ยกเลิก</button>';
+  footer += '<button class="btn btn-primary" onclick="saveSWFromModal()">' + (isNew ? '➕ เพิ่ม' : '💾 บันทึก') + '</button>';
+
+  openModal(isNew ? '➕ เพิ่มระดับหวาน' : '✏️ แก้ไขระดับหวาน', html, footer);
+}
+
+function saveSWFromModal() {
+  var id = ($('fSWId') || {}).value;
+  var name = ($('fSWName') || {}).value.trim();
+  if (!name) { toast('กรุณาใส่ชื่อ', 'error'); return; }
+  var data = {
+    name: name,
+    emoji: ($('fSWEmoji') || {}).value || '🍯',
+    addPrice: parseFloat(($('fSWPrice') || {}).value) || 0,
+    active: hasClass($('fSWActive'), 'on')
+  };
+  if (id) { ST.updateSweetLevel(id, data); toast('อัพเดตแล้ว', 'success'); }
+  else { ST.addSweetLevel(data); toast('เพิ่มแล้ว', 'success'); }
+  closeMForce();
+  switchMenuTab('options');
+}
+
+function deleteSWFromModal() {
+  var id = ($('fSWId') || {}).value;
+  if (!id) return;
+  confirmDialog('ลบระดับหวานนี้?', function() {
+    ST.deleteSweetLevel(id);
+    closeMForce();
+    toast('ลบแล้ว', 'warning');
+    switchMenuTab('options');
   });
 }
 

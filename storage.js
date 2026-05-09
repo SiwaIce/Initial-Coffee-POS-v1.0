@@ -15,6 +15,8 @@ ST._keys = [
   'menu',
   'toppings',
   'sizes',
+  'sweetLevels',
+  'drinkTypes',
   'orders',
   'stock',
   'stockLogs',
@@ -672,6 +674,105 @@ ST.getStorageInfo = function() {
     totalFormatted: formatSize(total),
     details: details
   };
+};
+
+/* ============================================
+   SWEET LEVELS
+   ============================================ */
+ST.getSweetLevels = function() {
+  var levels = ST.getObj('sweetLevels', null);
+  if (!levels || levels.length === 0) {
+    levels = ST._defaultSweetLevels();
+    ST.setObj('sweetLevels', levels);
+  }
+  return levels;
+};
+
+ST.saveSweetLevels = function(levels) {
+  ST.setObj('sweetLevels', levels);
+};
+
+ST._defaultSweetLevels = function() {
+  return [
+    { id: 'sw_none', name: 'ไม่หวาน', nameEn: 'No Sugar', emoji: '⬜', addPrice: 0, sort: 1, active: true },
+    { id: 'sw_less', name: 'หวานน้อย', nameEn: 'Less Sweet', emoji: '🟨', addPrice: 0, sort: 2, active: true },
+    { id: 'sw_normal', name: 'หวานปกติ', nameEn: 'Normal', emoji: '🟧', addPrice: 0, sort: 3, active: true },
+    { id: 'sw_more', name: 'หวานมาก', nameEn: 'Extra Sweet', emoji: '🟥', addPrice: 0, sort: 4, active: true }
+  ];
+};
+
+ST.addSweetLevel = function(item) {
+  var levels = ST.getSweetLevels();
+  item.id = item.id || genId('sw');
+  item.sort = item.sort || levels.length + 1;
+  item.active = item.active !== undefined ? item.active : true;
+  levels.push(item);
+  ST.saveSweetLevels(levels);
+  return item;
+};
+
+ST.updateSweetLevel = function(id, data) {
+  var levels = ST.getSweetLevels();
+  var idx = findIndexById(levels, id);
+  if (idx === -1) return null;
+  for (var k in data) levels[idx][k] = data[k];
+  ST.saveSweetLevels(levels);
+  return levels[idx];
+};
+
+ST.deleteSweetLevel = function(id) {
+  var levels = ST.getSweetLevels();
+  removeById(levels, id);
+  ST.saveSweetLevels(levels);
+};
+
+/* ============================================
+   DRINK TYPES (ร้อน / เย็น / ปั่น)
+   ============================================ */
+ST.getDrinkTypes = function() {
+  var types = ST.getObj('drinkTypes', null);
+  if (!types || types.length === 0) {
+    types = ST._defaultDrinkTypes();
+    ST.setObj('drinkTypes', types);
+  }
+  return types;
+};
+
+ST.saveDrinkTypes = function(types) {
+  ST.setObj('drinkTypes', types);
+};
+
+ST._defaultDrinkTypes = function() {
+  return [
+    { id: 'dt_hot', name: 'ร้อน', nameEn: 'Hot', emoji: '🔥', addPrice: 0, sort: 1, active: true },
+    { id: 'dt_iced', name: 'เย็น', nameEn: 'Iced', emoji: '🧊', addPrice: 0, sort: 2, active: true },
+    { id: 'dt_blend', name: 'ปั่น', nameEn: 'Blended', emoji: '🌀', addPrice: 10, sort: 3, active: true }
+  ];
+};
+
+ST.addDrinkType = function(item) {
+  var types = ST.getDrinkTypes();
+  item.id = item.id || genId('dt');
+  item.sort = item.sort || types.length + 1;
+  item.active = item.active !== undefined ? item.active : true;
+  types.push(item);
+  ST.saveDrinkTypes(types);
+  return item;
+};
+
+ST.updateDrinkType = function(id, data) {
+  var types = ST.getDrinkTypes();
+  var idx = findIndexById(types, id);
+  if (idx === -1) return null;
+  for (var k in data) types[idx][k] = data[k];
+  ST.saveDrinkTypes(types);
+  return types[idx];
+};
+
+ST.deleteDrinkType = function(id) {
+  var types = ST.getDrinkTypes();
+  removeById(types, id);
+  ST.saveDrinkTypes(types);
 };
 
 console.log('[storage.js] loaded');

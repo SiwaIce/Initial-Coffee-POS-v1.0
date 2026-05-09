@@ -1551,6 +1551,63 @@ tr:hover td { background: var(--glass); }
 .stagger > *:nth-child(n+7) { animation-delay: 0.14s; }
 
 /* ============================================
+   OPTION SELECTOR (Drink Type / Sweet Level)
+   ============================================ */
+.option-selector {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.option-btn {
+  flex: 1;
+  min-width: 70px;
+  padding: 10px 8px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all var(--transition);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  text-align: center;
+}
+.option-btn:hover { border-color: var(--accent); }
+.option-btn.active {
+  border-color: var(--accent);
+  background: rgba(249,115,22,0.1);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+.option-emoji { font-size: 20px; }
+.option-label { font-size: 13px; font-weight: 600; }
+.option-price { font-size: 11px; color: var(--accent); font-weight: 600; }
+
+.option-check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Cart item tags */
+.cart-item-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+.cart-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+  background: rgba(249,115,22,0.12);
+  color: var(--accent);
+  line-height: 1.4;
+}
+
+/* ============================================
    RESPONSIVE
    ============================================ */
 

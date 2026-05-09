@@ -1,6 +1,7 @@
 /* ============================================
    COFFEE POS — MODALS.JS
    Modal system + All modal forms
+   Version: 2.0 (Sweet Level + Drink Type)
    ============================================ */
 
 /* === MODAL STATE === */
@@ -22,7 +23,6 @@ function openModal(title, bodyHTML, footerHTML, opts) {
   mBody.innerHTML = bodyHTML || '';
   mFooter.innerHTML = footerHTML || '';
 
-  /* Wide modal */
   if (o.wide) {
     addClass(box, 'wide');
   } else {
@@ -33,7 +33,6 @@ function openModal(title, bodyHTML, footerHTML, opts) {
   addClass(box, 'show');
   _modalOpen = true;
 
-  /* Focus first input */
   setTimeout(function() {
     var firstInput = mBody.querySelector('input:not([type=hidden]),select,textarea');
     if (firstInput) firstInput.focus();
@@ -63,41 +62,76 @@ document.addEventListener('keydown', function(e) {
 
 /* ============================================
    MODAL: ADD TO CART
-   เลือก Size / Topping / จำนวน
+   v2 — Size / Drink Type / Sweet Level / Topping / Qty
    ============================================ */
 function modalAddToCart(menuItem) {
   if (!menuItem) return;
 
   var sizes = ST.getSizes();
   var toppings = ST.getToppings().filter(function(t) { return t.active !== false; });
+  var sweetLevels = ST.getSweetLevels().filter(function(s) { return s.active !== false; });
+  var drinkTypes = ST.getDrinkTypes().filter(function(d) { return d.active !== false; });
   var prices = menuItem.prices || {};
 
   /* หา sizes ที่เมนูนี้มีราคา */
   var availSizes = [];
   for (var i = 0; i < sizes.length; i++) {
     var p = prices[sizes[i].name];
-    if (p !== undefined && p > 0) {
-      availSizes.push(sizes[i]);
-    }
+    if (p !== undefined && p > 0) availSizes.push(sizes[i]);
   }
 
-  /* ถ้ามี size เดียว ไม่ต้องเลือก */
   var singleSize = availSizes.length <= 1;
   var defaultSize = availSizes.length > 0 ? availSizes[0].name : 'S';
+
+  /* Menu options flags */
+  var allowSweet = menuItem.allowSweetLevel !== false;
+  var allowDrinkType = menuItem.allowDrinkType !== false;
+  var availDrinkTypes = menuItem.availableDrinkTypes || null;
+
+  /* Filter drink types by menu config */
+  var menuDrinkTypes = [];
+  if (allowDrinkType) {
+    for (var dt = 0; dt < drinkTypes.length; dt++) {
+      if (!availDrinkTypes || availDrinkTypes.indexOf(drinkTypes[dt].id) !== -1) {
+        menuDrinkTypes.push(drinkTypes[dt]);
+      }
+    }
+  }
 
   /* Build body */
   var html = '';
 
   /* Menu info */
-  html += '<div class="text-center mb-16">';
-  html += '<div style="font-size:48px;margin-bottom:8px;">' + (menuItem.emoji || '☕') + '</div>';
+  html += '<div class="text-center mb-12">';
+  html += '<div style="font-size:44px;margin-bottom:6px;">' + (menuItem.emoji || '☕') + '</div>';
   html += '<div class="fw-700 fs-lg">' + sanitize(menuItem.name) + '</div>';
   html += '</div>';
 
-  /* Size selector */
+  /* === Drink Type === */
+  if (allowDrinkType && menuDrinkTypes.length > 1) {
+    html += '<div class="form-group">';
+    html += '<label class="form-label">🔥 ประเภทเครื่องดื่ม</label>';
+    html += '<div class="option-selector" id="drinkTypeSelector">';
+    for (var d = 0; d < menuDrinkTypes.length; d++) {
+      var dType = menuDrinkTypes[d];
+      var dActive = d === 0 ? ' active' : '';
+      var dPriceLabel = dType.addPrice > 0 ? ' +' + formatMoneySign(dType.addPrice) : '';
+      html += '<div class="option-btn' + dActive + '" data-id="' + sanitize(dType.id) + '" data-price="' + (dType.addPrice || 0) + '" onclick="selectOption(this,\'drinkTypeSelector\')">';
+      html += '<span class="option-emoji">' + (dType.emoji || '') + '</span>';
+      html += '<span class="option-label">' + sanitize(dType.name) + '</span>';
+      if (dPriceLabel) html += '<span class="option-price">' + dPriceLabel + '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+  } else if (allowDrinkType && menuDrinkTypes.length === 1) {
+    html += '<input type="hidden" id="singleDrinkType" value="' + sanitize(menuDrinkTypes[0].id) + '" data-price="' + (menuDrinkTypes[0].addPrice || 0) + '">';
+  }
+
+  /* === Size selector === */
   if (!singleSize) {
     html += '<div class="form-group">';
-    html += '<label class="form-label">ขนาด</label>';
+    html += '<label class="form-label">📏 ขนาด</label>';
     html += '<div class="size-selector" id="sizeSelector">';
     for (var s = 0; s < availSizes.length; s++) {
       var sz = availSizes[s];
@@ -112,16 +146,41 @@ function modalAddToCart(menuItem) {
     html += '</div>';
   }
 
-  /* Toppings */
+  /* === Sweet Level === */
+  if (allowSweet && sweetLevels.length > 0) {
+    html += '<div class="form-group">';
+    html += '<label class="form-label">🍯 ระดับความหวาน</label>';
+    html += '<div class="option-selector" id="sweetSelector">';
+    for (var sw = 0; sw < sweetLevels.length; sw++) {
+      var sl = sweetLevels[sw];
+      var swActive = '';
+      if (sl.id === 'sw_normal') {
+        swActive = ' active';
+      } else if (sw === 0 && !findById(sweetLevels, 'sw_normal')) {
+        swActive = ' active';
+      }
+
+      var swPrice = sl.addPrice > 0 ? ' +' + formatMoneySign(sl.addPrice) : '';
+      html += '<div class="option-btn' + swActive + '" data-id="' + sanitize(sl.id) + '" data-price="' + (sl.addPrice || 0) + '" onclick="selectOption(this,\'sweetSelector\')">';
+      html += '<span class="option-emoji">' + (sl.emoji || '') + '</span>';
+      html += '<span class="option-label">' + sanitize(sl.name) + '</span>';
+      if (swPrice) html += '<span class="option-price">' + swPrice + '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+  }
+
+  /* === Toppings === */
   if (toppings.length > 0) {
     html += '<div class="form-group">';
-    html += '<label class="form-label">Topping</label>';
+    html += '<label class="form-label">🧁 Topping</label>';
     html += '<div class="topping-list" id="toppingList">';
     for (var t = 0; t < toppings.length; t++) {
       var tp = toppings[t];
       html += '<div class="topping-item" data-id="' + sanitize(tp.id) + '" data-price="' + tp.price + '" onclick="toggleTopping(this)">';
       html += '<div class="topping-left">';
-      html += '<span style="font-size:18px;">☐</span>';
+      html += '<span style="font-size:16px;">☐</span>';
       html += '<span>' + sanitize(tp.name) + '</span>';
       html += '</div>';
       html += '<span class="topping-price">+' + formatMoneySign(tp.price) + '</span>';
@@ -131,38 +190,62 @@ function modalAddToCart(menuItem) {
     html += '</div>';
   }
 
-  /* Quantity */
+  /* === Quantity === */
   html += '<div class="form-group">';
-  html += '<label class="form-label">จำนวน</label>';
+  html += '<label class="form-label">🔢 จำนวน</label>';
   html += '<div class="flex-center gap-12">';
-  html += '<button class="qty-btn danger" onclick="modalCartQty(-1)" style="width:44px;height:44px;font-size:24px;">−</button>';
-  html += '<span id="modalCartQtyVal" class="fw-800 fs-xl" style="min-width:50px;text-align:center;">1</span>';
-  html += '<button class="qty-btn" onclick="modalCartQty(1)" style="width:44px;height:44px;font-size:24px;">+</button>';
+  html += '<button class="qty-btn danger" onclick="modalCartQty(-1)" style="width:40px;height:40px;font-size:22px;">−</button>';
+  html += '<span id="modalCartQtyVal" class="fw-800 fs-xl" style="min-width:44px;text-align:center;">1</span>';
+  html += '<button class="qty-btn" onclick="modalCartQty(1)" style="width:40px;height:40px;font-size:22px;">+</button>';
   html += '</div>';
   html += '</div>';
 
-  /* Note */
+  /* === Note === */
   html += '<div class="form-group">';
-  html += '<label class="form-label">หมายเหตุ</label>';
-  html += '<input type="text" id="modalCartNote" placeholder="เช่น หวานน้อย, ไม่ใส่น้ำแข็ง">';
+  html += '<label class="form-label">📝 หมายเหตุ</label>';
+  html += '<input type="text" id="modalCartNote" placeholder="เช่น ไม่ใส่น้ำแข็ง, ใส่นมเพิ่ม">';
   html += '</div>';
 
-  /* Price preview */
-  html += '<div class="card-glass text-center p-16 mt-16">';
+  /* === Price preview === */
+  html += '<div class="card-glass text-center p-16 mt-8">';
   html += '<div class="text-muted fs-sm">ราคารวม</div>';
-  html += '<div id="modalCartTotal" class="fw-800 text-accent" style="font-size:32px;">' + formatMoneySign(prices[defaultSize] || 0) + '</div>';
+  html += '<div id="modalCartTotal" class="fw-800 text-accent" style="font-size:28px;">' + formatMoneySign(prices[defaultSize] || 0) + '</div>';
   html += '</div>';
 
   /* Hidden data */
   html += '<input type="hidden" id="modalCartMenuId" value="' + sanitize(menuItem.id) + '">';
   html += '<input type="hidden" id="modalCartMenuName" value="' + sanitize(menuItem.name) + '">';
   html += '<input type="hidden" id="modalCartSingleSize" value="' + (singleSize ? defaultSize : '') + '">';
+  html += '<input type="hidden" id="modalCartAllowSweet" value="' + (allowSweet ? '1' : '0') + '">';
+  html += '<input type="hidden" id="modalCartAllowDrinkType" value="' + (allowDrinkType ? '1' : '0') + '">';
 
   var footer = '';
   footer += '<button class="btn btn-secondary" onclick="closeMForce()">ยกเลิก</button>';
   footer += '<button class="btn btn-primary btn-lg" onclick="confirmAddToCart()" style="flex:1;">🛒 เพิ่มลงตะกร้า</button>';
 
   openModal(sanitize(menuItem.name), html, footer);
+
+  /* Set default sweet to normal */
+  setTimeout(function() {
+    var normalBtn = qs('#sweetSelector .option-btn[data-id="sw_normal"]');
+    if (normalBtn && !qs('#sweetSelector .option-btn.active')) {
+      addClass(normalBtn, 'active');
+    }
+    updateCartModalTotal();
+  }, 100);
+}
+
+/* === Generic Option Selector === */
+function selectOption(el, parentId) {
+  var parent = document.getElementById(parentId);
+  if (!parent) return;
+  var siblings = parent.querySelectorAll('.option-btn');
+  for (var i = 0; i < siblings.length; i++) {
+    removeClass(siblings[i], 'active');
+  }
+  addClass(el, 'active');
+  vibrate(20);
+  updateCartModalTotal();
 }
 
 /* Size selector click */
@@ -203,25 +286,38 @@ function updateCartModalTotal() {
   var sizePrice = 0;
 
   if (singleSize) {
-    /* Only one size */
     var menuId = ($('modalCartMenuId') || {}).value;
     var menu = ST.getMenu();
     var item = findById(menu, menuId);
     sizePrice = item && item.prices ? (item.prices[singleSize] || 0) : 0;
   } else {
     var activeSize = qs('.size-option.active');
-    if (activeSize) {
-      sizePrice = parseFloat(activeSize.getAttribute('data-price')) || 0;
-    }
+    if (activeSize) sizePrice = parseFloat(activeSize.getAttribute('data-price')) || 0;
   }
 
+  /* Drink type add price */
+  var drinkTypePrice = 0;
+  var singleDT = $('singleDrinkType');
+  if (singleDT) {
+    drinkTypePrice = parseFloat(singleDT.getAttribute('data-price')) || 0;
+  } else {
+    var activeDT = qs('#drinkTypeSelector .option-btn.active');
+    if (activeDT) drinkTypePrice = parseFloat(activeDT.getAttribute('data-price')) || 0;
+  }
+
+  /* Sweet level add price */
+  var sweetPrice = 0;
+  var activeSW = qs('#sweetSelector .option-btn.active');
+  if (activeSW) sweetPrice = parseFloat(activeSW.getAttribute('data-price')) || 0;
+
+  /* Toppings */
   var toppingTotal = 0;
   var selectedTops = qsa('.topping-item.selected');
   for (var i = 0; i < selectedTops.length; i++) {
     toppingTotal += parseFloat(selectedTops[i].getAttribute('data-price')) || 0;
   }
 
-  var total = (sizePrice + toppingTotal) * _modalCartQty;
+  var total = (sizePrice + drinkTypePrice + sweetPrice + toppingTotal) * _modalCartQty;
   setText('modalCartTotal', formatMoneySign(total));
 }
 
@@ -232,10 +328,9 @@ function confirmAddToCart() {
   var singleSize = ($('modalCartSingleSize') || {}).value;
   var note = ($('modalCartNote') || {}).value || '';
 
-  /* Get selected size */
+  /* Size */
   var selectedSizeName = singleSize;
   var sizePrice = 0;
-
   if (!singleSize) {
     var activeSize = qs('.size-option.active');
     if (activeSize) {
@@ -248,13 +343,44 @@ function confirmAddToCart() {
     sizePrice = mi && mi.prices ? (mi.prices[singleSize] || 0) : 0;
   }
 
-  /* Get selected toppings */
+  /* Drink Type */
+  var drinkTypeId = '';
+  var drinkTypeName = '';
+  var drinkTypePrice = 0;
+  var singleDT = $('singleDrinkType');
+  if (singleDT) {
+    drinkTypeId = singleDT.value;
+    drinkTypePrice = parseFloat(singleDT.getAttribute('data-price')) || 0;
+    var dtObj = findById(ST.getDrinkTypes(), drinkTypeId);
+    drinkTypeName = dtObj ? dtObj.name : '';
+  } else {
+    var activeDT = qs('#drinkTypeSelector .option-btn.active');
+    if (activeDT) {
+      drinkTypeId = activeDT.getAttribute('data-id');
+      drinkTypePrice = parseFloat(activeDT.getAttribute('data-price')) || 0;
+      var dtObj2 = findById(ST.getDrinkTypes(), drinkTypeId);
+      drinkTypeName = dtObj2 ? dtObj2.name : '';
+    }
+  }
+
+  /* Sweet Level */
+  var sweetId = '';
+  var sweetName = '';
+  var sweetPrice = 0;
+  var activeSW = qs('#sweetSelector .option-btn.active');
+  if (activeSW) {
+    sweetId = activeSW.getAttribute('data-id');
+    sweetPrice = parseFloat(activeSW.getAttribute('data-price')) || 0;
+    var swObj = findById(ST.getSweetLevels(), sweetId);
+    sweetName = swObj ? swObj.name : '';
+  }
+
+  /* Toppings */
   var toppingIds = [];
   var toppingNames = [];
   var toppingTotal = 0;
   var selectedTops = qsa('.topping-item.selected');
   var allToppings = ST.getToppings();
-
   for (var i = 0; i < selectedTops.length; i++) {
     var tid = selectedTops[i].getAttribute('data-id');
     var tprice = parseFloat(selectedTops[i].getAttribute('data-price')) || 0;
@@ -264,13 +390,20 @@ function confirmAddToCart() {
     if (tObj) toppingNames.push(tObj.name);
   }
 
-  var lineTotal = (sizePrice + toppingTotal) * _modalCartQty;
+  var unitTotal = sizePrice + drinkTypePrice + sweetPrice + toppingTotal;
+  var lineTotal = unitTotal * _modalCartQty;
 
   var cartItem = {
     id: genId('ci'),
     menuId: menuId,
     name: menuName,
     size: selectedSizeName,
+    drinkType: drinkTypeId,
+    drinkTypeName: drinkTypeName,
+    drinkTypePrice: drinkTypePrice,
+    sweetLevel: sweetId,
+    sweetName: sweetName,
+    sweetPrice: sweetPrice,
     toppings: toppingIds,
     toppingNames: toppingNames,
     qty: _modalCartQty,
@@ -280,10 +413,7 @@ function confirmAddToCart() {
     note: note
   };
 
-  /* Add to cart (managed by views-pos.js) */
-  if (typeof addToCart === 'function') {
-    addToCart(cartItem);
-  }
+  if (typeof addToCart === 'function') addToCart(cartItem);
 
   _modalCartQty = 1;
   closeMForce();
@@ -301,7 +431,6 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
   var disc = discount || 0;
   var dType = discountType || 'baht';
 
-  /* Calc */
   var discountAmt = dType === 'percent' ? roundTo(subtotal * disc / 100, 2) : disc;
   var afterDiscount = subtotal - discountAmt;
 
@@ -357,7 +486,6 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
   html += '<div class="flex flex-wrap gap-8 mb-16">';
   var quickAmounts = [grandTotal, 100, 500, 1000];
   if (grandTotal > 1000) quickAmounts.push(2000);
-  /* Remove duplicates and sort */
   var seen = {};
   var uniq = [];
   for (var q = 0; q < quickAmounts.length; q++) {
@@ -377,7 +505,7 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
   html += '<div class="text-muted fs-sm">เงินทอน</div>';
   html += '<div id="payChange" class="fw-800 text-success" style="font-size:36px;">฿0</div>';
   html += '</div>';
-  html += '</div>'; /* end cashSection */
+  html += '</div>';
 
   /* Hidden data */
   html += '<input type="hidden" id="payGrandTotal" value="' + grandTotal + '">';
@@ -426,7 +554,6 @@ function calcChange() {
   var el = $('payChange');
   if (el) {
     el.textContent = formatMoneySign(change);
-    el.style.color = change > 0 ? '' : '';
   }
 }
 
@@ -464,7 +591,6 @@ function confirmPayment() {
 
   closeMForce();
 
-  /* Delegate to POS view */
   if (typeof completeOrder === 'function') {
     completeOrder(orderData);
   }
@@ -506,13 +632,20 @@ function modalReceipt(order) {
     html += '<div class="flex-between" style="margin-bottom:2px;">';
     html += '<span style="text-align:left;">';
     html += sanitize(it.name);
+    if (it.drinkTypeName) html += ' [' + sanitize(it.drinkTypeName) + ']';
     if (it.size) html += ' (' + sanitize(it.size) + ')';
     html += ' x' + it.qty;
     html += '</span>';
     html += '<span>' + formatMoneySign(it.lineTotal) + '</span>';
     html += '</div>';
+    /* Sweet level */
+    if (it.sweetName) {
+      html += '<div style="font-size:11px;color:var(--text-muted);text-align:left;padding-left:8px;margin-bottom:2px;">';
+      html += '🍯 ' + sanitize(it.sweetName);
+      html += '</div>';
+    }
     if (it.toppingNames && it.toppingNames.length > 0) {
-      html += '<div style="font-size:11px;color:var(--text-muted);text-align:left;padding-left:8px;margin-bottom:4px;">';
+      html += '<div style="font-size:11px;color:var(--text-muted);text-align:left;padding-left:8px;margin-bottom:2px;">';
       html += '+ ' + it.toppingNames.join(', ');
       html += '</div>';
     }
@@ -561,8 +694,6 @@ function modalReceipt(order) {
   footer += '<button class="btn btn-primary" onclick="doPrintReceipt()">🖨️ พิมพ์ใบเสร็จ</button>';
 
   openModal('🧾 ใบเสร็จ ' + cfg.orderPrefix + padZ(order.number), html, footer);
-
-  /* Store order ref for print */
   window._lastReceiptOrder = order;
 }
 
@@ -584,9 +715,13 @@ function doPrintReceipt() {
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
     var label = sanitize(it.name);
+    if (it.drinkTypeName) label += ' [' + it.drinkTypeName + ']';
     if (it.size) label += ' (' + it.size + ')';
     label += ' x' + it.qty;
     ph += '<div class="receipt-row"><span>' + label + '</span><span>' + formatMoney(it.lineTotal) + '</span></div>';
+    if (it.sweetName) {
+      ph += '<div style="padding-left:8px;font-size:10px;">🍯 ' + it.sweetName + '</div>';
+    }
     if (it.toppingNames && it.toppingNames.length > 0) {
       ph += '<div style="padding-left:8px;font-size:10px;">+ ' + it.toppingNames.join(', ') + '</div>';
     }
@@ -611,13 +746,14 @@ function doPrintReceipt() {
 }
 
 /* ============================================
-   MODAL: EDIT MENU ITEM
+   MODAL: EDIT MENU ITEM (v2)
    ============================================ */
 function modalEditMenu(item) {
   var isNew = !item;
   var m = item || {};
   var cats = ST.getCategories();
   var sizes = ST.getSizes();
+  var drinkTypes = ST.getDrinkTypes();
 
   var html = '';
 
@@ -627,7 +763,8 @@ function modalEditMenu(item) {
   html += '<input type="text" id="fMenuName" value="' + sanitize(m.name || '') + '" placeholder="เช่น อเมริกาโน่">';
   html += '</div>';
 
-  /* Category */
+  /* Category + Emoji */
+  html += '<div class="form-row">';
   html += '<div class="form-group">';
   html += '<label class="form-label">หมวดหมู่</label>';
   html += '<select id="fMenuCat">';
@@ -637,11 +774,10 @@ function modalEditMenu(item) {
   }
   html += '</select>';
   html += '</div>';
-
-  /* Emoji */
-  html += '<div class="form-group">';
+  html += '<div class="form-group" style="max-width:100px;">';
   html += '<label class="form-label">Emoji</label>';
-  html += '<input type="text" id="fMenuEmoji" value="' + sanitize(m.emoji || '☕') + '" placeholder="☕" style="font-size:24px;text-align:center;width:80px;">';
+  html += '<input type="text" id="fMenuEmoji" value="' + sanitize(m.emoji || '☕') + '" style="font-size:24px;text-align:center;">';
+  html += '</div>';
   html += '</div>';
 
   /* Prices */
@@ -661,8 +797,52 @@ function modalEditMenu(item) {
 
   /* Cost */
   html += '<div class="form-group">';
-  html += '<label class="form-label">ต้นทุน (฿) <span class="text-muted">(optional)</span></label>';
+  html += '<label class="form-label">ต้นทุน (฿)</label>';
   html += '<input type="number" id="fMenuCost" value="' + (m.cost || '') + '" placeholder="0" inputmode="numeric">';
+  html += '</div>';
+
+  /* === Drink Type Options === */
+  html += '<div class="card p-16 mb-16" style="border-color:var(--accent2);">';
+  html += '<div class="fw-700 mb-8">🔥 ประเภทเครื่องดื่ม</div>';
+
+  html += '<div class="form-group">';
+  html += '<label class="toggle-wrap" onclick="toggleToggle(this)">';
+  html += '<div class="toggle' + (m.allowDrinkType !== false ? ' on' : '') + '" id="fMenuAllowDrinkType"></div>';
+  html += '<span>เปิดให้เลือกประเภท (ร้อน/เย็น/ปั่น)</span>';
+  html += '</label>';
+  html += '</div>';
+
+  html += '<div class="form-group" id="fMenuDrinkTypesWrap">';
+  html += '<label class="form-label">ประเภทที่มี (เลือกได้หลายตัว)</label>';
+  html += '<div class="option-check-list">';
+  for (var dt = 0; dt < drinkTypes.length; dt++) {
+    var dtChecked = '';
+    if (!m.availableDrinkTypes || m.availableDrinkTypes.indexOf(drinkTypes[dt].id) !== -1) {
+      dtChecked = ' checked';
+    }
+    html += '<label class="checkbox-wrap">';
+    html += '<input type="checkbox" class="fMenuDrinkType" value="' + sanitize(drinkTypes[dt].id) + '"' + dtChecked + '>';
+    html += '<span>' + drinkTypes[dt].emoji + ' ' + sanitize(drinkTypes[dt].name);
+    if (drinkTypes[dt].addPrice > 0) html += ' (+' + formatMoneySign(drinkTypes[dt].addPrice) + ')';
+    html += '</span>';
+    html += '</label>';
+  }
+  html += '</div>';
+  html += '</div>';
+
+  html += '</div>';
+
+  /* === Sweet Level Options === */
+  html += '<div class="card p-16 mb-16" style="border-color:var(--warning);">';
+  html += '<div class="fw-700 mb-8">🍯 ระดับความหวาน</div>';
+
+  html += '<div class="form-group">';
+  html += '<label class="toggle-wrap" onclick="toggleToggle(this)">';
+  html += '<div class="toggle' + (m.allowSweetLevel !== false ? ' on' : '') + '" id="fMenuAllowSweet"></div>';
+  html += '<span>เปิดให้เลือกระดับหวาน</span>';
+  html += '</label>';
+  html += '</div>';
+
   html += '</div>';
 
   /* Active */
@@ -703,13 +883,24 @@ function saveMenuFromModal() {
     return;
   }
 
+  /* Drink types */
+  var allowDrinkType = hasClass($('fMenuAllowDrinkType'), 'on');
+  var availDrinkTypes = [];
+  var dtChecks = qsa('.fMenuDrinkType');
+  for (var d = 0; d < dtChecks.length; d++) {
+    if (dtChecks[d].checked) availDrinkTypes.push(dtChecks[d].value);
+  }
+
   var data = {
     name: name,
     catId: ($('fMenuCat') || {}).value || '',
     emoji: ($('fMenuEmoji') || {}).value || '☕',
     prices: prices,
     cost: parseFloat(($('fMenuCost') || {}).value) || 0,
-    active: hasClass($('fMenuActive'), 'on')
+    active: hasClass($('fMenuActive'), 'on'),
+    allowDrinkType: allowDrinkType,
+    availableDrinkTypes: availDrinkTypes,
+    allowSweetLevel: hasClass($('fMenuAllowSweet'), 'on')
   };
 
   if (id) {
@@ -756,8 +947,8 @@ function modalEditCategory(cat) {
   html += '<label class="form-label">ไอคอน</label>';
   html += '<div class="flex flex-wrap gap-8">';
   for (var i = 0; i < emojiList.length; i++) {
-    var sel = (c.icon === emojiList[i]) ? ' active' : '';
-    html += '<button class="size-option' + sel + '" style="flex:none;width:48px;height:48px;font-size:24px;padding:0;display:flex;align-items:center;justify-content:center;" data-emoji="' + emojiList[i] + '" onclick="selectCatEmoji(this)">' + emojiList[i] + '</button>';
+    var selCls = (c.icon === emojiList[i]) ? ' active' : '';
+    html += '<button class="size-option' + selCls + '" style="flex:none;width:44px;height:44px;font-size:22px;padding:0;display:flex;align-items:center;justify-content:center;" data-emoji="' + emojiList[i] + '" onclick="selectCatEmoji(this)">' + emojiList[i] + '</button>';
   }
   html += '</div>';
   html += '</div>';
@@ -1040,8 +1231,12 @@ function modalOrderDetail(order) {
     html += '<div class="flex-between">';
     html += '<div>';
     html += '<div class="fw-600">' + sanitize(it.name);
-    if (it.size) html += ' <span class="badge badge-accent">' + sanitize(it.size) + '</span>';
+    if (it.drinkTypeName) html += ' <span class="badge badge-info" style="font-size:10px;">' + sanitize(it.drinkTypeName) + '</span>';
+    if (it.size) html += ' <span class="badge badge-accent" style="font-size:10px;">' + sanitize(it.size) + '</span>';
     html += '</div>';
+    if (it.sweetName) {
+      html += '<div class="text-muted fs-sm">🍯 ' + sanitize(it.sweetName) + '</div>';
+    }
     if (it.toppingNames && it.toppingNames.length > 0) {
       html += '<div class="text-muted fs-sm">+ ' + it.toppingNames.join(', ') + '</div>';
     }
@@ -1081,7 +1276,7 @@ function modalOrderDetail(order) {
 
   var footer = '';
   if (order.status !== 'cancelled') {
-    footer += '<button class="btn btn-danger btn-sm" onclick="cancelOrderFromModal(\'' + sanitize(order.id) + '\')">❌ ยกเลิกออเดอร์</button>';
+    footer += '<button class="btn btn-danger btn-sm" onclick="cancelOrderFromModal(\'' + sanitize(order.id) + '\')">❌ ยกเลิก</button>';
   }
   footer += '<button class="btn btn-secondary" onclick="closeMForce()">ปิด</button>';
   footer += '<button class="btn btn-primary" onclick="modalReceipt(window._detailOrder)">🧾 ใบเสร็จ</button>';
