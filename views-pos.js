@@ -50,6 +50,9 @@ function renderPOSView() {
   html += '</div>';
   html += '</div>';
 
+  /* Recent Orders Strip */
+  html += renderRecentOrders();
+
   /* Category Tabs */
   html += renderCatTabs();
 
@@ -763,6 +766,12 @@ function completeOrder(orderData) {
   /* Refresh UI */
   refreshCartUI();
 
+  /* Refresh recent orders strip */
+  var recentEl = $('recentStrip');
+  if (recentEl) {
+    recentEl.outerHTML = renderRecentOrders();
+  }
+
   /* Play sound effect (vibrate) */
   vibrate(100);
 
@@ -863,4 +872,230 @@ document.addEventListener('touchend', function() {
   _touchDeltaY = 0;
 }, { passive: true });
 
+/* ============================================
+   CSS: RECENT ORDERS STRIP
+   ============================================ */
+(function() {
+  var styleId = 'recentStripStyle';
+  if (document.getElementById(styleId)) return;
+
+  var css = '';
+
+  /* Strip container */
+  css += '.recent-orders-strip{';
+  css += 'background:var(--bg-secondary);';
+  css += 'border-bottom:1px solid var(--border);';
+  css += 'padding:0;';
+  css += 'flex-shrink:0;';
+  css += '}';
+
+  /* Header */
+  css += '.recent-header{';
+  css += 'display:flex;align-items:center;justify-content:space-between;';
+  css += 'padding:8px 20px;';
+  css += '}';
+
+  /* Scrollable row */
+  css += '.recent-scroll{';
+  css += 'display:flex;gap:10px;';
+  css += 'padding:0 20px 10px;';
+  css += 'overflow-x:auto;';
+  css += '-ms-overflow-style:none;scrollbar-width:none;';
+  css += '}';
+  css += '.recent-scroll::-webkit-scrollbar{display:none;}';
+
+  /* Card */
+  css += '.recent-card{';
+  css += 'min-width:200px;max-width:240px;';
+  css += 'background:var(--bg-card);';
+  css += 'border:1px solid var(--border);';
+  css += 'border-radius:var(--radius-sm);';
+  css += 'padding:10px 12px;';
+  css += 'flex-shrink:0;';
+  css += 'transition:all var(--transition);';
+  css += 'cursor:default;';
+  css += '}';
+  css += '.recent-card:hover{border-color:var(--accent);box-shadow:0 2px 12px rgba(0,0,0,0.15);}';
+
+  /* Items */
+  css += '.recent-items{display:flex;flex-direction:column;gap:1px;}';
+  css += '.recent-item-line{';
+  css += 'display:flex;justify-content:space-between;gap:8px;';
+  css += 'font-size:12px;line-height:1.5;';
+  css += '}';
+
+  /* Action buttons */
+  css += '.recent-btn{';
+  css += 'width:28px;height:28px;';
+  css += 'display:flex;align-items:center;justify-content:center;';
+  css += 'border-radius:6px;font-size:14px;';
+  css += 'background:var(--glass);border:1px solid var(--border);';
+  css += 'cursor:pointer;transition:all var(--transition);';
+  css += '}';
+  css += '.recent-btn:hover{border-color:var(--accent);background:rgba(249,115,22,0.1);}';
+  css += '.recent-btn:active{transform:scale(0.9);}';
+
+  /* Mobile */
+  css += '@media(max-width:768px){';
+  css += '.recent-header{padding:6px 12px;}';
+  css += '.recent-scroll{padding:0 12px 8px;gap:8px;}';
+  css += '.recent-card{min-width:170px;max-width:200px;padding:8px 10px;}';
+  css += '}';
+
+  var style = document.createElement('style');
+  style.id = styleId;
+  style.textContent = css;
+  document.head.appendChild(style);
+})();
+
 console.log('[views-pos.js] loaded');
+/* ============================================
+   RECENT ORDERS STRIP
+   แสดง 5 ออเดอร์ล่าสุดบนหน้า POS
+   ============================================ */
+function renderRecentOrders() {
+  var orders = ST.getOrders();
+  /* เอาเฉพาะ completed, sort ใหม่สุดก่อน */
+  var recent = [];
+  for (var i = orders.length - 1; i >= 0 && recent.length < 5; i--) {
+    if (orders[i].status !== 'cancelled') {
+      recent.push(orders[i]);
+    }
+  }
+
+  if (recent.length === 0) return '';
+
+  var cfg = ST.getConfig();
+  var html = '';
+  html += '<div class="recent-orders-strip" id="recentStrip">';
+
+  /* Header */
+  html += '<div class="recent-header">';
+  html += '<div class="flex gap-8" style="align-items:center;">';
+  html += '<span class="fw-600 fs-sm">🕐 ออเดอร์ล่าสุด</span>';
+  html += '<span class="badge badge-accent">' + recent.length + '</span>';
+  html += '</div>';
+  html += '<button class="btn-icon" onclick="toggleRecentStrip()" style="width:28px;height:28px;font-size:14px;" title="ซ่อน/แสดง">';
+  html += '<span id="recentToggleIcon">▾</span>';
+  html += '</button>';
+  html += '</div>';
+
+  /* Scrollable cards */
+  html += '<div class="recent-scroll" id="recentScroll">';
+  for (var r = 0; r < recent.length; r++) {
+    html += renderRecentCard(recent[r], cfg);
+  }
+  html += '</div>';
+
+  html += '</div>';
+  return html;
+}
+
+function renderRecentCard(order, cfg) {
+  var items = order.items || [];
+  var payIcons = { cash: '💵', transfer: '📱', qr: '📷' };
+  var timeAgo = getTimeAgo(order.timestamp);
+
+  var html = '';
+  html += '<div class="recent-card">';
+
+  /* Top: Order# + Time */
+  html += '<div class="flex-between mb-4">';
+  html += '<span class="fw-700 text-accent fs-sm">' + cfg.orderPrefix + padZ(order.number) + '</span>';
+  html += '<span class="text-muted" style="font-size:11px;">' + timeAgo + '</span>';
+  html += '</div>';
+
+  /* Items preview (compact) */
+  html += '<div class="recent-items">';
+  for (var i = 0; i < items.length && i < 3; i++) {
+    var it = items[i];
+    html += '<div class="recent-item-line">';
+    html += '<span class="truncate">' + sanitize(it.name);
+    if (it.size) html += ' <span class="text-muted">(' + it.size + ')</span>';
+    html += '</span>';
+    html += '<span class="text-muted">x' + it.qty + '</span>';
+    html += '</div>';
+  }
+  if (items.length > 3) {
+    html += '<div class="recent-item-line text-muted" style="font-size:11px;">+' + (items.length - 3) + ' รายการ</div>';
+  }
+  html += '</div>';
+
+  /* Bottom: Total + Actions */
+  html += '<div class="flex-between mt-6" style="align-items:center;">';
+  html += '<div class="flex gap-4" style="align-items:center;">';
+  html += '<span>' + (payIcons[order.payment] || '💳') + '</span>';
+  html += '<span class="fw-800 text-accent">' + formatMoneySign(order.total) + '</span>';
+  html += '</div>';
+  html += '<div class="flex gap-4">';
+  html += '<button class="recent-btn" onclick="event.stopPropagation(); reorderFromRecent(\'' + sanitize(order.id) + '\')" title="สั่งซ้ำ">🔄</button>';
+  html += '<button class="recent-btn" onclick="event.stopPropagation(); modalReceipt(findById(ST.getOrders(),\'' + sanitize(order.id) + '\'))" title="ใบเสร็จ">🧾</button>';
+  html += '</div>';
+  html += '</div>';
+
+  html += '</div>';
+  return html;
+}
+
+/* Time ago helper */
+function getTimeAgo(timestamp) {
+  if (!timestamp) return '';
+  var now = Date.now();
+  var diff = now - timestamp;
+  var mins = Math.floor(diff / 60000);
+  var hrs = Math.floor(diff / 3600000);
+
+  if (mins < 1) return 'เมื่อกี้';
+  if (mins < 60) return mins + ' นาทีก่อน';
+  if (hrs < 24) return hrs + ' ชม.ก่อน';
+  return Math.floor(hrs / 24) + ' วันก่อน';
+}
+
+/* Toggle show/hide */
+function toggleRecentStrip() {
+  var scroll = $('recentScroll');
+  var icon = $('recentToggleIcon');
+  if (!scroll) return;
+
+  if (scroll.style.display === 'none') {
+    scroll.style.display = '';
+    if (icon) icon.textContent = '▾';
+  } else {
+    scroll.style.display = 'none';
+    if (icon) icon.textContent = '▸';
+  }
+  vibrate(20);
+}
+
+/* Reorder — copy items from previous order to cart */
+function reorderFromRecent(orderId) {
+  var orders = ST.getOrders();
+  var order = findById(orders, orderId);
+  if (!order || !order.items) return;
+
+  var items = order.items;
+  var addedCount = 0;
+
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    var cartItem = {
+      id: genId('ci'),
+      menuId: it.menuId,
+      name: it.name,
+      size: it.size || 'S',
+      toppings: it.toppings ? it.toppings.slice() : [],
+      toppingNames: it.toppingNames ? it.toppingNames.slice() : [],
+      qty: it.qty || 1,
+      unitPrice: it.unitPrice || 0,
+      toppingPrice: it.toppingPrice || 0,
+      lineTotal: it.lineTotal || 0,
+      note: it.note || ''
+    };
+    POS.cart.push(cartItem);
+    addedCount += cartItem.qty;
+  }
+
+  refreshCartUI();
+  vibrate(50);
+  toast('🔄 สั่งซ้ำ ' + addedCount + ' รายการ', 'success', 2000);
+}
