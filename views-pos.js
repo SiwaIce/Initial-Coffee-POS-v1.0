@@ -146,17 +146,35 @@ function renderRecentCard(order, cfg) {
   html += '<span class="text-muted" style="font-size:11px;">' + timeAgo + '</span>';
   html += '</div>';
 
-  /* Items preview */
+  /* Items preview — with full detail */
   html += '<div class="recent-items">';
   for (var i = 0; i < items.length && i < 3; i++) {
     var it = items[i];
+
+    /* Line 1: Name */
     html += '<div class="recent-item-line">';
-    html += '<span class="truncate">' + sanitize(it.name);
-    if (it.drinkTypeName) html += ' <span class="text-muted">[' + sanitize(it.drinkTypeName) + ']</span>';
-    if (it.size) html += ' <span class="text-muted">(' + it.size + ')</span>';
-    html += '</span>';
+    html += '<span class="truncate fw-600">' + sanitize(it.name) + '</span>';
     html += '<span class="text-muted">x' + it.qty + '</span>';
     html += '</div>';
+
+    /* Line 2: Tags — drinkType, size, sweetLevel */
+    var tags = [];
+    if (it.drinkTypeName) tags.push(it.drinkTypeName);
+    if (it.size) tags.push(it.size);
+    if (it.sweetName) tags.push(it.sweetName);
+
+    if (tags.length > 0) {
+      html += '<div class="recent-item-tags">';
+      for (var tg = 0; tg < tags.length; tg++) {
+        html += '<span class="recent-tag">' + sanitize(tags[tg]) + '</span>';
+      }
+      html += '</div>';
+    }
+
+    /* Toppings */
+    if (it.toppingNames && it.toppingNames.length > 0) {
+      html += '<div class="recent-item-sub">+' + sanitize(it.toppingNames.join(', ')) + '</div>';
+    }
   }
   if (items.length > 3) {
     html += '<div class="recent-item-line text-muted" style="font-size:11px;">+' + (items.length - 3) + ' รายการ</div>';
@@ -1105,6 +1123,14 @@ document.addEventListener('touchend', function() {
   css += '}';
   css += '.recent-btn:hover{border-color:var(--accent);background:rgba(249,115,22,0.1);}';
   css += '.recent-btn:active{transform:scale(0.9);}';
+    /* Recent item tags */
+  css += '.recent-item-tags{display:flex;gap:3px;flex-wrap:wrap;margin:1px 0;}';
+  css += '.recent-tag{';
+  css += 'display:inline-block;padding:1px 5px;font-size:9px;font-weight:600;';
+  css += 'border-radius:3px;background:rgba(249,115,22,0.12);color:var(--accent);';
+  css += 'line-height:1.4;';
+  css += '}';
+  css += '.recent-item-sub{font-size:10px;color:var(--text-muted);margin:1px 0;}';
 
   css += '@media(max-width:768px){';
   css += '.recent-header{padding:6px 12px;}';

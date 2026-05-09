@@ -587,33 +587,52 @@ ST.hasSampleData = function() {
   return ST.getMenu().length > 0;
 };
 
+/* ============================================
+   SEED / SAMPLE DATA
+   ============================================ */
+ST.hasSampleData = function() {
+  return ST.getMenu().length > 0;
+};
+
 ST.seedSampleData = function() {
-  /* Categories already seeded via getCategories() */
   ST.getCategories();
   ST.getSizes();
   ST.getToppings();
+  ST.getSweetLevels();
+  ST.getDrinkTypes();
 
-  /* Sample Menu */
+  /* Sample Menu (with stockLinks + drinkType + sweet) */
   var sampleMenu = [
-    { id: 'm_americano', name: 'อเมริกาโน่', catId: 'cat_coffee', emoji: '☕', image: '', prices: { S: 60, M: 70, L: 80 }, cost: 15, active: true, stockLinks: [], sort: 1, created: todayStr() },
-    { id: 'm_latte', name: 'ลาเต้', catId: 'cat_coffee', emoji: '🥛', image: '', prices: { S: 70, M: 80, L: 90 }, cost: 20, active: true, stockLinks: [], sort: 2, created: todayStr() },
-    { id: 'm_mocha', name: 'มอคค่า', catId: 'cat_coffee', emoji: '🍫', image: '', prices: { S: 80, M: 90, L: 100 }, cost: 25, active: true, stockLinks: [], sort: 3, created: todayStr() },
-    { id: 'm_espresso', name: 'เอสเพรสโซ่', catId: 'cat_coffee', emoji: '☕', image: '', prices: { S: 50, M: 60, L: 0 }, cost: 12, active: true, stockLinks: [], sort: 4, created: todayStr() },
-    { id: 'm_cappuccino', name: 'คาปูชิโน่', catId: 'cat_coffee', emoji: '☕', image: '', prices: { S: 70, M: 80, L: 90 }, cost: 22, active: true, stockLinks: [], sort: 5, created: todayStr() },
-    { id: 'm_greentea', name: 'ชาเขียว', catId: 'cat_tea', emoji: '🍵', image: '', prices: { S: 65, M: 75, L: 85 }, cost: 18, active: true, stockLinks: [], sort: 6, created: todayStr() },
-    { id: 'm_thaitea', name: 'ชาไทย', catId: 'cat_tea', emoji: '🧋', image: '', prices: { S: 55, M: 65, L: 75 }, cost: 15, active: true, stockLinks: [], sort: 7, created: todayStr() },
-    { id: 'm_lemontea', name: 'ชามะนาว', catId: 'cat_tea', emoji: '🍋', image: '', prices: { S: 50, M: 60, L: 70 }, cost: 12, active: true, stockLinks: [], sort: 8, created: todayStr() },
-    { id: 'm_cocoa', name: 'โกโก้', catId: 'cat_blend', emoji: '🍫', image: '', prices: { S: 75, M: 85, L: 95 }, cost: 20, active: true, stockLinks: [], sort: 9, created: todayStr() },
-    { id: 'm_smoothie', name: 'สมูทตี้ผลไม้', catId: 'cat_blend', emoji: '🥤', image: '', prices: { S: 80, M: 90, L: 100 }, cost: 25, active: true, stockLinks: [], sort: 10, created: todayStr() },
-    { id: 'm_croissant', name: 'ครัวซองค์', catId: 'cat_bakery', emoji: '🥐', image: '', prices: { S: 65 }, cost: 25, active: true, stockLinks: [], sort: 11, created: todayStr() },
-    { id: 'm_cake', name: 'เค้กช็อกโกแลต', catId: 'cat_bakery', emoji: '🍰', image: '', prices: { S: 120 }, cost: 40, active: true, stockLinks: [], sort: 12, created: todayStr() },
-    { id: 'm_cookie', name: 'คุกกี้', catId: 'cat_bakery', emoji: '🍪', image: '', prices: { S: 45 }, cost: 15, active: true, stockLinks: [], sort: 13, created: todayStr() },
-    { id: 'm_water', name: 'น้ำเปล่า', catId: 'cat_other', emoji: '💧', image: '', prices: { S: 20 }, cost: 5, active: true, stockLinks: [], sort: 14, created: todayStr() },
-    { id: 'm_soda', name: 'โซดา', catId: 'cat_other', emoji: '🥤', image: '', prices: { S: 35, M: 45 }, cost: 10, active: true, stockLinks: [], sort: 15, created: todayStr() }
+    { id: 'm_americano', name: 'อเมริกาโน่', catId: 'cat_coffee', emoji: '☕', image: '', prices: { S: 60, M: 70, L: 80 }, cost: 15, active: true, allowDrinkType: true, availableDrinkTypes: ['dt_hot', 'dt_iced', 'dt_blend'], allowSweetLevel: true, stockLinks: [{ stockId: 'stk_coffee', qty: 18 }, { stockId: 'stk_water', qty: 200 }], sort: 1, created: todayStr() },
+    { id: 'm_latte', name: 'ลาเต้', catId: 'cat_coffee', emoji: '🥛', image: '', prices: { S: 70, M: 80, L: 90 }, cost: 20, active: true, allowDrinkType: true, availableDrinkTypes: ['dt_hot', 'dt_iced', 'dt_blend'], allowSweetLevel: true, stockLinks: [{ stockId: 'stk_coffee', qty: 18 }, { stockId: 'stk_milk', qty: 150 }], sort: 2, created: todayStr() },
+    { id: 'm_mocha', name: 'มอคค่า', catId: 'cat_coffee', emoji: '🍫', image: '', prices: { S: 80, M: 90, L: 100 }, cost: 25, active: true, allowDrinkType: true, availableDrinkTypes: ['dt_hot', 'dt_iced', 'dt_blend'], allowSweetLevel: true, stockLinks: [{ stockId: 'stk_coffee', qty: 18 }, { stockId: 'stk_milk', qty: 120 }, { stockId: 'stk_syrup', qty: 30 }], sort: 3, created: todayStr() },
+    { id: 'm_espresso', name: 'เอสเพรสโซ่', catId: 'cat_coffee', emoji: '☕', image: '', prices: { S: 50 }, cost: 12, active: true, allowDrinkType: true, availableDrinkTypes: ['dt_hot'], allowSweetLevel: false, stockLinks: [{ stockId: 'stk_coffee', qty: 18 }], sort: 4, created: todayStr() },
+    { id: 'm_cappuccino', name: 'คาปูชิโน่', catId: 'cat_coffee', emoji: '☕', image: '', prices: { S: 70, M: 80, L: 90 }, cost: 22, active: true, allowDrinkType: true, availableDrinkTypes: ['dt_hot', 'dt_iced'], allowSweetLevel: true, stockLinks: [{ stockId: 'stk_coffee', qty: 18 }, { stockId: 'stk_milk', qty: 100 }], sort: 5, created: todayStr() },
+    { id: 'm_greentea', name: 'ชาเขียว', catId: 'cat_tea', emoji: '🍵', image: '', prices: { S: 65, M: 75, L: 85 }, cost: 18, active: true, allowDrinkType: true, availableDrinkTypes: ['dt_hot', 'dt_iced', 'dt_blend'], allowSweetLevel: true, stockLinks: [], sort: 6, created: todayStr() },
+    { id: 'm_thaitea', name: 'ชาไทย', catId: 'cat_tea', emoji: '🧋', image: '', prices: { S: 55, M: 65, L: 75 }, cost: 15, active: true, allowDrinkType: true, availableDrinkTypes: ['dt_iced', 'dt_blend'], allowSweetLevel: true, stockLinks: [], sort: 7, created: todayStr() },
+    { id: 'm_lemontea', name: 'ชามะนาว', catId: 'cat_tea', emoji: '🍋', image: '', prices: { S: 50, M: 60, L: 70 }, cost: 12, active: true, allowDrinkType: true, availableDrinkTypes: ['dt_iced'], allowSweetLevel: true, stockLinks: [], sort: 8, created: todayStr() },
+    { id: 'm_cocoa', name: 'โกโก้', catId: 'cat_blend', emoji: '🍫', image: '', prices: { S: 75, M: 85, L: 95 }, cost: 20, active: true, allowDrinkType: true, availableDrinkTypes: ['dt_hot', 'dt_iced', 'dt_blend'], allowSweetLevel: true, stockLinks: [], sort: 9, created: todayStr() },
+    { id: 'm_smoothie', name: 'สมูทตี้ผลไม้', catId: 'cat_blend', emoji: '🥤', image: '', prices: { S: 80, M: 90, L: 100 }, cost: 25, active: true, allowDrinkType: true, availableDrinkTypes: ['dt_blend'], allowSweetLevel: true, stockLinks: [], sort: 10, created: todayStr() },
+    { id: 'm_croissant', name: 'ครัวซองค์', catId: 'cat_bakery', emoji: '🥐', image: '', prices: { S: 65 }, cost: 25, active: true, allowDrinkType: false, allowSweetLevel: false, stockLinks: [], sort: 11, created: todayStr() },
+    { id: 'm_cake', name: 'เค้กช็อกโกแลต', catId: 'cat_bakery', emoji: '🍰', image: '', prices: { S: 120 }, cost: 40, active: true, allowDrinkType: false, allowSweetLevel: false, stockLinks: [], sort: 12, created: todayStr() },
+    { id: 'm_cookie', name: 'คุกกี้', catId: 'cat_bakery', emoji: '🍪', image: '', prices: { S: 45 }, cost: 15, active: true, allowDrinkType: false, allowSweetLevel: false, stockLinks: [], sort: 13, created: todayStr() },
+    { id: 'm_water', name: 'น้ำเปล่า', catId: 'cat_other', emoji: '💧', image: '', prices: { S: 20 }, cost: 5, active: true, allowDrinkType: false, allowSweetLevel: false, stockLinks: [], sort: 14, created: todayStr() },
+    { id: 'm_soda', name: 'โซดา', catId: 'cat_other', emoji: '🥤', image: '', prices: { S: 35, M: 45 }, cost: 10, active: true, allowDrinkType: false, allowSweetLevel: false, stockLinks: [], sort: 15, created: todayStr() }
   ];
 
   ST.saveMenu(sampleMenu);
-  toast('เพิ่มข้อมูลตัวอย่างแล้ว', 'success');
+
+  /* Sample Stock (4 รายการ) */
+  var sampleStock = [
+    { id: 'stk_coffee', name: 'เมล็ดกาแฟ', unit: 'g', qty: 5000, minQty: 500, costPerUnit: 0.8, lastUpdate: todayStr() },
+    { id: 'stk_milk', name: 'นมสด', unit: 'ml', qty: 10000, minQty: 2000, costPerUnit: 0.05, lastUpdate: todayStr() },
+    { id: 'stk_syrup', name: 'น้ำเชื่อม', unit: 'ml', qty: 3000, minQty: 500, costPerUnit: 0.1, lastUpdate: todayStr() },
+    { id: 'stk_water', name: 'น้ำกรอง', unit: 'ml', qty: 50000, minQty: 5000, costPerUnit: 0.002, lastUpdate: todayStr() }
+  ];
+
+  ST.saveStock(sampleStock);
+
+  toast('เพิ่มข้อมูลตัวอย่างแล้ว (เมนู + วัตถุดิบ)', 'success');
 };
 
 /* ============================================
