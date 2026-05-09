@@ -417,21 +417,19 @@ function renderCart() {
 
 function renderCartItem(item) {
   var html = '';
-  html += '<div class="cart-item anim-fadeUp">';
+  html += '<div class="cart-item">';
 
   /* Info */
   html += '<div class="cart-item-info">';
-  html += '<div class="cart-item-name">' + sanitize(item.name) + '</div>';
+  html += '<div class="cart-item-name">' + sanitize(item.name);
+  if (item.size) html += ' <span class="text-muted fs-sm">(' + item.size + ')</span>';
+  html += '</div>';
 
-  var detail = [];
-  if (item.size) detail.push('Size: ' + item.size);
   if (item.toppingNames && item.toppingNames.length > 0) {
-    detail.push('+ ' + item.toppingNames.join(', '));
+    html += '<div class="cart-item-detail">+ ' + sanitize(item.toppingNames.join(', ')) + '</div>';
   }
-  if (item.note) detail.push('📝 ' + item.note);
-
-  if (detail.length > 0) {
-    html += '<div class="cart-item-detail">' + sanitize(detail.join(' | ')) + '</div>';
+  if (item.note) {
+    html += '<div class="cart-item-detail">📝 ' + sanitize(item.note) + '</div>';
   }
 
   /* Qty controls */
@@ -439,7 +437,7 @@ function renderCartItem(item) {
   html += '<button class="qty-btn danger" onclick="updateCartItemQty(\'' + sanitize(item.id) + '\', -1)">−</button>';
   html += '<span class="qty-val">' + item.qty + '</span>';
   html += '<button class="qty-btn" onclick="updateCartItemQty(\'' + sanitize(item.id) + '\', 1)">+</button>';
-  html += '<button class="qty-btn danger" onclick="removeCartItem(\'' + sanitize(item.id) + '\')" title="ลบ" style="margin-left:8px;">✕</button>';
+  html += '<button class="qty-btn danger" onclick="removeCartItem(\'' + sanitize(item.id) + '\')" title="ลบ" style="margin-left:6px;font-size:12px;">✕</button>';
   html += '</div>';
 
   html += '</div>';
@@ -539,8 +537,9 @@ function renderCartActions() {
 
   /* Pay button */
   var disabled = POS.cart.length === 0 ? ' disabled' : '';
+  var total = calcGrandTotal();
   html += '<button class="btn-pay' + disabled + '" id="btnPay" onclick="onPayClick()"' + disabled + '>';
-  html += '💳 ชำระเงิน ' + formatMoneySign(calcGrandTotal());
+  html += '💳 ชำระ ' + formatMoneySign(total);
   html += '</button>';
 
   html += '</div>';
