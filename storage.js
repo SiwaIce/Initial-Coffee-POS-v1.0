@@ -88,7 +88,7 @@ ST.getConfig = function() {
     receiptFooter: 'ขอบคุณที่ใช้บริการ',
     orderPrefix: '#',
     lastOrderDate: '',
-    lastOrderNumber: 0
+    lastOrderNumber: 0,
     quickCashAmounts: [20, 50, 100, 500, 1000]
   };
   var cfg = ST.getObj('config', {});
@@ -96,10 +96,6 @@ ST.getConfig = function() {
     if (cfg[k] === undefined) cfg[k] = defaults[k];
   }
   return cfg;
-};
-
-ST.saveConfig = function(cfg) {
-  ST.setObj('config', cfg);
 };
 
 /* ============================================
