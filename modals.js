@@ -44,16 +44,23 @@ function openModal(title, bodyHTML, footerHTML, opts) {
 
 /* === CLOSE MODAL === */
 function closeM() {
-  if (!_modalOpen) return;
   var overlay = $('modalOverlay');
   var box = $('modalBox');
-  removeClass(overlay, 'show');
-  removeClass(box, 'show');
+  if (overlay) removeClass(overlay, 'show');
+  if (box) removeClass(box, 'show');
   _modalOpen = false;
 }
 
 function closeMForce() {
-  closeM();
+  var overlay = $('modalOverlay');
+  var box = $('modalBox');
+  if (overlay) {
+    overlay.className = 'modal-overlay';
+  }
+  if (box) {
+    box.className = 'modal-box';
+  }
+  _modalOpen = false;
 }
 
 /* === ESC KEY === */
