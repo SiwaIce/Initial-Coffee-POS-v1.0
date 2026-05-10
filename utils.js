@@ -563,4 +563,121 @@ function printReceipt(html) {
   }, 200);
 }
 
+/* ============================================
+   [Standard Version] SOUND EFFECTS
+   ============================================ */
+var _audioCtx = null;
+
+function getAudioCtx() {
+  if (!_audioCtx) {
+    try {
+      _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      _audioCtx = null;
+    }
+  }
+  return _audioCtx;
+}
+
+function playSound(type) {
+  var ctx = getAudioCtx();
+  if (!ctx) return;
+  try {
+    if (type === 'add') {
+      playTone(ctx, 880, 0.08, 0.25);
+    } else if (type === 'success') {
+      playTone(ctx, 660, 0.1, 0.2);
+      setTimeout(function() { playTone(ctx, 880, 0.1, 0.2); }, 120);
+      setTimeout(function() { playTone(ctx, 1100, 0.15, 0.25); }, 250);
+    } else if (type === 'error') {
+      playTone(ctx, 300, 0.2, 0.3);
+    } else if (type === 'clear') {
+      playTone(ctx, 500, 0.08, 0.15);
+      setTimeout(function() { playTone(ctx, 400, 0.08, 0.15); }, 100);
+    }
+  } catch (e) {}
+}
+
+function playTone(ctx, freq, duration, volume) {
+  var osc = ctx.createOscillator();
+  var gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  gain.gain.value = volume || 0.2;
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+  osc.start(ctx.currentTime);
+  osc.stop(ctx.currentTime + duration + 0.05);
+}
+
+/* ============================================
+   [Standard Version] PROMPTPAY QR GENERATOR
+   ============================================ */
+function generatePromptPayPayload(ppId, amount) {
+  var id = String(ppId).replace(/[^0-9]/g, '');
+  var subTag = '01';
+  var formattedId = id;
+
+  /* Phone number */
+  if (id.length === 10) {
+    subTag = '01';
+    formattedId = '0066' + id.substring(1);
+  } else if (id.length === 13) {
+    /* National ID / Tax ID */
+    subTag = '02';
+    formattedId = id;
+  } else if (id.length === 15) {
+    /* E-Wallet */
+    subTag = '03';
+    formattedId = id;
+  }
+
+  var merchant = ppTlv('00', 'A000000677010111') + ppTlv(subTag, formattedId);
+  var payload = '';
+  payload += ppTlv('00', '01');
+  payload += ppTlv('01', amount > 0 ? '12' : '11');
+  payload += ppTlv('29', merchant);
+  payload += ppTlv('53', '764');
+  if (amount > 0) {
+    payload += ppTlv('54', amount.toFixed(2));
+  }
+  payload += ppTlv('58', 'TH');
+
+  /* CRC */
+  var crcInput = payload + '6304';
+  var crc = ppCrc16(crcInput);
+  var crcHex = ('0000' + crc.toString(16).toUpperCase()).slice(-4);
+  payload += '6304' + crcHex;
+
+  return payload;
+}
+
+function ppTlv(tag, val) {
+  var len = ('00' + val.length).slice(-2);
+  return tag + len + val;
+}
+
+function ppCrc16(str) {
+  var crc = 0xFFFF;
+  for (var i = 0; i < str.length; i++) {
+    crc ^= str.charCodeAt(i) << 8;
+    for (var j = 0; j < 8; j++) {
+      if (crc & 0x8000) {
+        crc = (crc << 1) ^ 0x1021;
+      } else {
+        crc = crc << 1;
+      }
+      crc &= 0xFFFF;
+    }
+  }
+  return crc;
+}
+
+function getPromptPayQRUrl(ppId, amount, size) {
+  var sz = size || 250;
+  var payload = generatePromptPayPayload(ppId, amount || 0);
+  return 'https://api.qrserver.com/v1/create-qr-code/?size=' + sz + 'x' + sz + '&data=' + encodeURIComponent(payload);
+}
+
 console.log('[utils.js] loaded');

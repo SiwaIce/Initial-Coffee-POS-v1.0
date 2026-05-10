@@ -559,9 +559,10 @@ function addToCart(cartItem) {
   refreshCartUI();
 
   /* [Standard Version] Sound */
-  var cfg = ST.getConfig();
-  if (cfg.soundEnabled !== false) playSound('add');
-}
+  if (typeof playSound === 'function') {
+    var cfg = ST.getConfig();
+    if (cfg.soundEnabled !== false) playSound('add');
+  }
 
 function findMatchingCartItem(newItem) {
   for (var i = 0; i < POS.cart.length; i++) {
@@ -1055,9 +1056,10 @@ function completeOrder(orderData) {
 
   vibrate(100);
 /* [Standard Version] Sound */
-  var cfg2 = ST.getConfig();
-  if (cfg2.soundEnabled !== false) playSound('success');
-
+if (typeof playSound === 'function') {
+    var cfg2 = ST.getConfig();
+    if (cfg2.soundEnabled !== false) playSound('success');
+  }
   toast('✅ ออเดอร์ ' + cfg.orderPrefix + padZ(saved.number) + ' สำเร็จ!', 'success', 3000);
 
   setTimeout(function() {
