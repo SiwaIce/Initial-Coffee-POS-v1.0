@@ -21,7 +21,9 @@ ST._keys = [
   'stock',
   'stockLogs',
   'staff',
-  'shifts'
+  'shifts',
+  'favorites',
+  'channels'
 ];
 
 /* === LOW-LEVEL === */
@@ -89,13 +91,21 @@ ST.getConfig = function() {
     orderPrefix: '#',
     lastOrderDate: '',
     lastOrderNumber: 0,
-    quickCashAmounts: [20, 50, 100, 500, 1000]
+    quickCashAmounts: [20, 50, 100, 500, 1000],
+    soundEnabled: true,
+    promptPayId: '',
+    promptPayName: '',
+    promptPayEnabled: false
   };
   var cfg = ST.getObj('config', {});
   for (var k in defaults) {
     if (cfg[k] === undefined) cfg[k] = defaults[k];
   }
   return cfg;
+};
+
+ST.saveConfig = function(cfg) {
+  ST.setObj('config', cfg);
 };
 
 /* ============================================
@@ -789,6 +799,93 @@ ST.deleteDrinkType = function(id) {
   var types = ST.getDrinkTypes();
   removeById(types, id);
   ST.saveDrinkTypes(types);
+};
+
+/* ============================================
+   [Standard Version] FAVORITES
+   ============================================ */
+ST.getFavorites = function() {
+  return ST.getObj('favorites', []);
+};
+
+ST.saveFavorites = function(favs) {
+  ST.setObj('favorites', favs);
+};
+
+ST.toggleFavorite = function(menuId) {
+  var favs = ST.getFavorites();
+  var idx = favs.indexOf(menuId);
+  if (idx === -1) {
+    favs.push(menuId);
+  } else {
+    favs.splice(idx, 1);
+  }
+  ST.saveFavorites(favs);
+  return idx === -1;
+};
+
+ST.isFavorite = function(menuId) {
+  return ST.getFavorites().indexOf(menuId) !== -1;
+};
+
+/* ============================================
+   [Standard Version] SALES CHANNELS
+   ============================================ */
+ST.getChannels = function() {
+  var channels = ST.getObj('channels', null);
+  if (!channels || channels.length === 0) {
+    channels = ST._defaultChannels();
+    ST.setObj('channels', channels);
+  }
+  return channels;
+};
+
+ST.saveChannels = function(channels) {
+  ST.setObj('channels', channels);
+};
+
+ST.addChannel = function(ch) {
+  var channels = ST.getChannels();
+  ch.id = ch.id || genId('ch');
+  ch.active = ch.active !== undefined ? ch.active : true;
+  channels.push(ch);
+  ST.saveChannels(channels);
+  return ch;
+};
+
+ST.updateChannel = function(id, data) {
+  var channels = ST.getChannels();
+  var idx = findIndexById(channels, id);
+  if (idx === -1) return null;
+  for (var k in data) channels[idx][k] = data[k];
+  ST.saveChannels(channels);
+  return channels[idx];
+};
+
+ST.deleteChannel = function(id) {
+  var channels = ST.getChannels();
+  removeById(channels, id);
+  ST.saveChannels(channels);
+};
+
+ST._defaultChannels = function() {
+  return [
+    { id: 'ch_walkin', name: 'Walk-in', emoji: '🚶', active: true },
+    { id: 'ch_grab', name: 'Grab', emoji: '🟢', active: true },
+    { id: 'ch_lineman', name: 'LINE MAN', emoji: '🟡', active: true },
+    { id: 'ch_robin', name: 'Robinhood', emoji: '🔴', active: false },
+    { id: 'ch_online', name: 'Online', emoji: '📱', active: false },
+    { id: 'ch_phone', name: 'โทรสั่ง', emoji: '📞', active: false }
+  ];
+};
+
+ST.getActiveChannels = function() {
+  var channels = ST.getChannels();
+  var result = [];
+  for (var i = 0; i < channels.length; i++) {
+    if (channels[i].active !== false) result.push(channels[i]);
+  }
+  return result;
 };
 
 console.log('[storage.js] loaded');
