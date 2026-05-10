@@ -679,8 +679,6 @@ function confirmPayment() {
   if (typeof completeOrder === 'function') completeOrder(orderData);
 }
 
-}
-
 /* ============================================
    MODAL: RECEIPT
    ============================================ */
