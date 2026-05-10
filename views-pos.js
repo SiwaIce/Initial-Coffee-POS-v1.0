@@ -563,7 +563,7 @@ function addToCart(cartItem) {
     var cfg = ST.getConfig();
     if (cfg.soundEnabled !== false) playSound('add');
   }
-
+}
 function findMatchingCartItem(newItem) {
   for (var i = 0; i < POS.cart.length; i++) {
     var c = POS.cart[i];
