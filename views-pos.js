@@ -11,7 +11,9 @@ var POS = {
   searchQuery: '',
   discount: 0,
   discountType: 'baht',
-  drawerOpen: false
+  drawerOpen: false,
+  selectedChannel: 'ch_walkin',
+  selectedChannelName: 'Walk-in'
 };
 
 /* ============================================
@@ -50,6 +52,9 @@ function renderPOSView() {
   html += '<input type="text" id="posSearch" placeholder="ค้นหาเมนู..." value="' + sanitize(POS.searchQuery) + '" oninput="posSearchMenu(this.value)">';
   html += '</div>';
   html += '</div>';
+
+    /* Favorites Row */
+  html += renderFavoritesRow();
 
   /* Recent Orders Strip */
   html += renderRecentOrders();
@@ -262,6 +267,74 @@ function reorderFromRecent(orderId) {
 }
 
 /* ============================================
+   [Standard Version] FAVORITES ROW
+   ============================================ */
+function renderFavoritesRow() {
+  var favIds = ST.getFavorites();
+  if (favIds.length === 0) return '';
+
+  var menuItems = ST.getMenu();
+  var favItems = [];
+  for (var i = 0; i < favIds.length; i++) {
+    var item = findById(menuItems, favIds[i]);
+    if (item && item.active !== false) favItems.push(item);
+  }
+
+  if (favItems.length === 0) return '';
+
+  var html = '<div class="fav-row">';
+  html += '<div class="fav-header">';
+  html += '<span class="fw-600 fs-sm">⭐ เมนูโปรด</span>';
+  html += '</div>';
+  html += '<div class="fav-scroll">';
+
+  for (var f = 0; f < favItems.length; f++) {
+    var it = favItems[f];
+    var basePrice = ST.getMenuBasePrice(it);
+    var cartQty = getCartQtyForMenu(it.id);
+
+    html += '<div class="fav-item" onclick="onMenuItemClick(\'' + sanitize(it.id) + '\')">';
+    if (cartQty > 0) {
+      html += '<span class="fav-badge">' + cartQty + '</span>';
+    }
+    html += '<span class="fav-emoji">' + (it.emoji || '☕') + '</span>';
+    html += '<span class="fav-name">' + sanitize(it.name) + '</span>';
+    html += '<span class="fav-price">' + formatMoneySign(basePrice) + '</span>';
+    html += '</div>';
+  }
+
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+function toggleFav(menuId, btn) {
+  var added = ST.toggleFavorite(menuId);
+  if (btn) {
+    btn.textContent = added ? '⭐' : '☆';
+    if (added) addClass(btn, 'active');
+    else removeClass(btn, 'active');
+  }
+  /* Refresh favorites row */
+  var favRow = qs('.fav-row');
+  if (favRow) {
+    favRow.outerHTML = renderFavoritesRow();
+  } else if (added) {
+    var catTabs = qs('.cat-tabs');
+    if (catTabs) {
+      var newRow = document.createElement('div');
+      newRow.innerHTML = renderFavoritesRow();
+      if (newRow.firstChild) {
+        catTabs.parentNode.insertBefore(newRow.firstChild, catTabs);
+      }
+    }
+  }
+  vibrate(30);
+  playSound(added ? 'add' : 'clear');
+  toast(added ? '⭐ เพิ่มเป็นเมนูโปรดแล้ว' : 'ยกเลิกเมนูโปรดแล้ว', 'info', 1200);
+}
+
+/* ============================================
    CATEGORY TABS
    ============================================ */
 function renderCatTabs() {
@@ -353,6 +426,9 @@ function renderMenuItems() {
 
     html += '<div class="menu-item-name">' + sanitize(it.name) + '</div>';
     html += '<div class="menu-item-price">' + formatMoneySign(basePrice) + '</div>';
+/* Favorite button */
+    var isFav = ST.isFavorite(it.id);
+    html += '<button class="fav-btn' + (isFav ? ' active' : '') + '" onclick="event.stopPropagation(); toggleFav(\'' + sanitize(it.id) + '\', this)" title="' + (isFav ? 'ยกเลิกโปรด' : 'เพิ่มเป็นโปรด') + '">' + (isFav ? '⭐' : '☆') + '</button>';
 
     html += '</div>';
   }
@@ -481,6 +557,10 @@ function addToCart(cartItem) {
     POS.cart.push(cartItem);
   }
   refreshCartUI();
+
+  /* [Standard Version] Sound */
+  var cfg = ST.getConfig();
+  if (cfg.soundEnabled !== false) playSound('add');
 }
 
 function findMatchingCartItem(newItem) {
@@ -931,6 +1011,8 @@ function completeOrder(orderData) {
 
   var order = {
     items: cloneObj(POS.cart),
+        channel: POS.selectedChannel || 'ch_walkin',
+    channelName: POS.selectedChannelName || 'Walk-in',
     subtotal: orderData.subtotal,
     discount: orderData.discount,
     discountType: POS.discountType,
@@ -972,6 +1054,9 @@ function completeOrder(orderData) {
   }
 
   vibrate(100);
+/* [Standard Version] Sound */
+  var cfg2 = ST.getConfig();
+  if (cfg2.soundEnabled !== false) playSound('success');
 
   toast('✅ ออเดอร์ ' + cfg.orderPrefix + padZ(saved.number) + ' สำเร็จ!', 'success', 3000);
 
@@ -1126,6 +1211,29 @@ document.addEventListener('touchend', function() {
   css += 'line-height:1.4;';
   css += '}';
   css += '.recent-item-sub{font-size:10px;color:var(--text-muted);margin:1px 0;}';
+/* [Standard Version] Favorites */
+  css += '.fav-row{background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:6px 16px 8px;flex-shrink:0;}';
+  css += '.fav-header{margin-bottom:4px;}';
+  css += '.fav-scroll{display:flex;gap:8px;overflow-x:auto;-ms-overflow-style:none;scrollbar-width:none;}';
+  css += '.fav-scroll::-webkit-scrollbar{display:none;}';
+  css += '.fav-item{display:flex;align-items:center;gap:6px;padding:6px 12px;';
+  css += 'background:var(--bg-card);border:1px solid var(--border);border-radius:20px;';
+  css += 'cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all var(--transition);position:relative;}';
+  css += '.fav-item:hover{border-color:var(--accent);}';
+  css += '.fav-item:active{transform:scale(0.95);}';
+  css += '.fav-emoji{font-size:18px;}';
+  css += '.fav-name{font-size:12px;font-weight:600;}';
+  css += '.fav-price{font-size:11px;color:var(--accent);font-weight:700;}';
+  css += '.fav-badge{position:absolute;top:-4px;right:-4px;background:var(--accent);color:#fff;';
+  css += 'font-size:10px;font-weight:800;min-width:16px;height:16px;border-radius:8px;';
+  css += 'display:flex;align-items:center;justify-content:center;padding:0 3px;}';
+
+  /* Favorite button on menu item */
+  css += '.fav-btn{position:absolute;top:4px;left:4px;width:24px;height:24px;';
+  css += 'display:flex;align-items:center;justify-content:center;font-size:14px;';
+  css += 'background:transparent;border:none;cursor:pointer;opacity:0.3;transition:all var(--transition);z-index:2;}';
+  css += '.fav-btn:hover,.fav-btn.active{opacity:1;}';
+  css += '.fav-btn.active{color:var(--accent);}';
 
   css += '@media(max-width:768px){';
   css += '.recent-header{padding:6px 12px;}';

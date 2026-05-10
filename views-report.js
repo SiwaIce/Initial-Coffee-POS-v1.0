@@ -227,6 +227,16 @@ function renderDashboard() {
   }
   html += '</div>';
 
+/* [Standard Version] Channel Pie Chart */
+  html += '<div class="card">';
+  html += '<div class="card-header"><div class="card-title">🛵 ช่องทางการขาย</div></div>';
+  if (orderCount > 0) {
+    html += renderChannelPie(orders);
+  } else {
+    html += '<div class="text-muted text-center p-20">ยังไม่มีข้อมูล</div>';
+  }
+  html += '</div>';
+
   /* Category Pie Chart */
   html += '<div class="card">';
   html += '<div class="card-header"><div class="card-title">📁 สัดส่วนหมวดหมู่</div></div>';
@@ -301,7 +311,6 @@ function renderHourlyReport() {
     hourData[hour].sales += orders[i].total || 0;
   }
 
-  /* Find max for scaling */
   var maxSales = 0;
   var maxCount = 0;
   for (var hk in hourData) {
@@ -311,43 +320,26 @@ function renderHourlyReport() {
 
   var html = '';
 
-  /* Sales by hour bar chart */
+  /* Sales by hour */
   html += '<div class="card mb-16">';
   html += '<div class="card-header"><div class="card-title">💰 ยอดขายรายชั่วโมง</div></div>';
-  html += '<div class="chart-container" style="padding:20px 12px 40px;">';
-  html += '<div class="chart-bar-group">';
+  html += '<div class="chart-scroll">';
+  html += '<div class="hbar-chart">';
 
   for (var bh = 6; bh <= 22; bh++) {
     var d = hourData[bh] || { count: 0, sales: 0 };
-    var pctH = maxSales > 0 ? (d.sales / maxSales) * 100 : 0;
-    var minH = d.sales > 0 ? 4 : 0;
-    html += '<div class="chart-bar" style="height:' + Math.max(minH, pctH) + '%;" title="' + padZ(bh) + ':00 — ' + formatMoneySign(d.sales) + '">';
+    var pctW = maxSales > 0 ? (d.sales / maxSales) * 100 : 0;
+
+    html += '<div class="hbar-row">';
+    html += '<div class="hbar-label-fixed">' + padZ(bh) + ':00</div>';
+    html += '<div class="hbar-bar-wrap">';
     if (d.sales > 0) {
-      html += '<div class="chart-bar-value">' + formatMoney(d.sales) + '</div>';
+      html += '<div class="hbar-bar" style="width:' + Math.max(3, pctW) + '%;"></div>';
+      html += '<span class="hbar-value">' + formatMoneySign(d.sales) + ' (' + d.count + ' บิล)</span>';
+    } else {
+      html += '<span class="hbar-value text-muted">-</span>';
     }
-    html += '<div class="chart-bar-label">' + padZ(bh) + '</div>';
     html += '</div>';
-  }
-
-  html += '</div>';
-  html += '</div>';
-  html += '</div>';
-
-  /* Order count by hour */
-  html += '<div class="card mb-16">';
-  html += '<div class="card-header"><div class="card-title">🧾 จำนวนออเดอร์รายชั่วโมง</div></div>';
-  html += '<div class="chart-container" style="padding:20px 12px 40px;">';
-  html += '<div class="chart-bar-group">';
-
-  for (var ch = 6; ch <= 22; ch++) {
-    var cd = hourData[ch] || { count: 0, sales: 0 };
-    var pctC = maxCount > 0 ? (cd.count / maxCount) * 100 : 0;
-    var minC = cd.count > 0 ? 4 : 0;
-    html += '<div class="chart-bar" style="height:' + Math.max(minC, pctC) + '%;background:linear-gradient(180deg,var(--accent2),var(--info));">';
-    if (cd.count > 0) {
-      html += '<div class="chart-bar-value">' + cd.count + '</div>';
-    }
-    html += '<div class="chart-bar-label">' + padZ(ch) + '</div>';
     html += '</div>';
   }
 
@@ -365,12 +357,10 @@ function renderHourlyReport() {
     }
   }
 
-  html += '<div class="card-glass p-16">';
-  html += '<div class="flex gap-12 flex-wrap">';
-  html += '<div><span class="text-muted fs-sm">⏰ ชั่วโมงขายดีสุด</span><div class="fw-800 text-accent fs-lg">' + padZ(peakHour) + ':00 - ' + padZ(peakHour + 1) + ':00</div></div>';
-  html += '<div><span class="text-muted fs-sm">💰 ยอดขายช่วงนั้น</span><div class="fw-800 text-success fs-lg">' + formatMoneySign(peakSales) + '</div></div>';
-  html += '<div><span class="text-muted fs-sm">🧾 ออเดอร์ช่วงนั้น</span><div class="fw-800 text-info fs-lg">' + (hourData[peakHour] ? hourData[peakHour].count : 0) + ' บิล</div></div>';
-  html += '</div>';
+  html += '<div class="kpi-grid">';
+  html += kpiCard('⏰', padZ(peakHour) + ':00-' + padZ(peakHour + 1) + ':00', 'ชั่วโมงขายดีสุด', 'accent');
+  html += kpiCard('💰', formatMoneySign(peakSales), 'ยอดขายช่วงนั้น', 'success');
+  html += kpiCard('🧾', (hourData[peakHour] ? hourData[peakHour].count : 0) + ' บิล', 'ออเดอร์ช่วงนั้น', 'info');
   html += '</div>';
 
   return html;
@@ -399,7 +389,6 @@ function renderDailyReport() {
     }
   }
 
-  /* Sort dates */
   var dateKeys = Object.keys(dayData).sort(function(a, b) {
     var da = parseDate(a);
     var db = parseDate(b);
@@ -407,7 +396,6 @@ function renderDailyReport() {
     return da.getTime() - db.getTime();
   });
 
-  /* Find max */
   var maxDaySales = 0;
   for (var mk = 0; mk < dateKeys.length; mk++) {
     if (dayData[dateKeys[mk]].sales > maxDaySales) {
@@ -417,27 +405,27 @@ function renderDailyReport() {
 
   var html = '';
 
-  /* Daily bar chart */
+  /* Daily horizontal bar chart */
   html += '<div class="card mb-16">';
   html += '<div class="card-header"><div class="card-title">💰 ยอดขายรายวัน</div></div>';
-  html += '<div class="chart-container" style="padding:20px 12px 50px;">';
-  html += '<div class="chart-bar-group">';
+  html += '<div class="hbar-chart">';
 
   for (var b = 0; b < dateKeys.length; b++) {
     var dk = dateKeys[b];
     var dd = dayData[dk];
     var pctD = maxDaySales > 0 ? (dd.sales / maxDaySales) * 100 : 0;
-    /* Short date label */
     var parts = dk.split('/');
     var shortLabel = parts[0] + '/' + parts[1];
 
-    html += '<div class="chart-bar" style="height:' + Math.max(4, pctD) + '%;" title="' + dk + ' — ' + formatMoneySign(dd.sales) + '">';
-    html += '<div class="chart-bar-value">' + formatMoney(dd.sales) + '</div>';
-    html += '<div class="chart-bar-label">' + shortLabel + '</div>';
+    html += '<div class="hbar-row">';
+    html += '<div class="hbar-label-fixed">' + shortLabel + '</div>';
+    html += '<div class="hbar-bar-wrap">';
+    html += '<div class="hbar-bar" style="width:' + Math.max(3, pctD) + '%;"></div>';
+    html += '<span class="hbar-value">' + formatMoneySign(dd.sales) + ' (' + dd.count + ' บิล)</span>';
+    html += '</div>';
     html += '</div>';
   }
 
-  html += '</div>';
   html += '</div>';
   html += '</div>';
 
@@ -449,9 +437,9 @@ function renderDailyReport() {
   html += '<thead><tr>';
   html += '<th>วันที่</th>';
   html += '<th class="text-right">ออเดอร์</th>';
-  html += '<th class="text-right">แก้ว/ชิ้น</th>';
+  html += '<th class="text-right">แก้ว</th>';
   html += '<th class="text-right">ยอดขาย</th>';
-  html += '<th class="text-right">เฉลี่ย/บิล</th>';
+  html += '<th class="text-right">เฉลี่ย</th>';
   html += '</tr></thead>';
   html += '<tbody>';
 
@@ -468,25 +456,25 @@ function renderDailyReport() {
     grandItems += td.items;
 
     html += '<tr>';
-    html += '<td><span class="fw-600">' + relativeDay(tk) + '</span> <span class="text-muted fs-sm">' + sanitize(tk) + '</span></td>';
+    html += '<td><div class="fw-600">' + relativeDay(tk) + '</div><div class="text-muted" style="font-size:11px;">' + sanitize(tk) + '</div></td>';
     html += '<td class="text-right">' + td.count + '</td>';
     html += '<td class="text-right">' + td.items + '</td>';
     html += '<td class="text-right fw-700 text-accent">' + formatMoneySign(td.sales) + '</td>';
-    html += '<td class="text-right">' + formatMoneySign(avg) + '</td>';
+    html += '<td class="text-right text-muted">' + formatMoneySign(avg) + '</td>';
     html += '</tr>';
   }
 
-  /* Footer totals */
   var grandAvg = grandCount > 0 ? roundTo(grandTotal / grandCount, 0) : 0;
-  html += '<tr style="border-top:2px solid var(--border);font-weight:800;">';
-  html += '<td>รวมทั้งหมด</td>';
-  html += '<td class="text-right">' + grandCount + '</td>';
-  html += '<td class="text-right">' + grandItems + '</td>';
-  html += '<td class="text-right text-accent">' + formatMoneySign(grandTotal) + '</td>';
-  html += '<td class="text-right">' + formatMoneySign(grandAvg) + '</td>';
-  html += '</tr>';
+  html += '</tbody>';
+  html += '<tfoot><tr style="border-top:2px solid var(--border);">';
+  html += '<td class="fw-800">รวม</td>';
+  html += '<td class="text-right fw-800">' + grandCount + '</td>';
+  html += '<td class="text-right fw-800">' + grandItems + '</td>';
+  html += '<td class="text-right fw-800 text-accent">' + formatMoneySign(grandTotal) + '</td>';
+  html += '<td class="text-right fw-700">' + formatMoneySign(grandAvg) + '</td>';
+  html += '</tr></tfoot>';
 
-  html += '</tbody></table>';
+  html += '</table>';
   html += '</div>';
   html += '</div>';
 
@@ -749,6 +737,50 @@ function renderCategoryPie(orders) {
         color: catColors[c % catColors.length]
       });
     }
+  }
+
+  return renderPieChart(pieData);
+}
+
+function renderChannelPie(orders) {
+  var channels = ST.getChannels();
+  var chColors = ['#22c55e', '#f97316', '#eab308', '#ef4444', '#3b82f6', '#8b5cf6', '#06b6d4', '#ec4899'];
+
+  var chSales = {};
+  for (var i = 0; i < orders.length; i++) {
+    var chId = orders[i].channel || 'ch_walkin';
+    if (!chSales[chId]) chSales[chId] = 0;
+    chSales[chId] += orders[i].total || 0;
+  }
+
+  var pieData = [];
+  for (var c = 0; c < channels.length; c++) {
+    var sales = chSales[channels[c].id] || 0;
+    if (sales > 0) {
+      pieData.push({
+        label: channels[c].emoji + ' ' + channels[c].name,
+        value: sales,
+        color: chColors[c % chColors.length]
+      });
+    }
+  }
+  /* Include unknown channel */
+  if (chSales['ch_walkin'] === undefined) {
+    var unknownSales = 0;
+    for (var k in chSales) {
+      var found = false;
+      for (var j = 0; j < channels.length; j++) {
+        if (channels[j].id === k) { found = true; break; }
+      }
+      if (!found) unknownSales += chSales[k];
+    }
+    if (unknownSales > 0) {
+      pieData.push({ label: '🏪 อื่นๆ', value: unknownSales, color: '#6b7280' });
+    }
+  }
+
+  if (pieData.length === 0) {
+    return '<div class="text-muted text-center p-16">ไม่มีข้อมูล</div>';
   }
 
   return renderPieChart(pieData);

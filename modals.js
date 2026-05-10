@@ -472,29 +472,37 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
 
   var vat = 0;
   var sc = 0;
-  if (cfg.vatEnabled) {
-    vat = roundTo(afterDiscount * cfg.vatRate / 100, 2);
-  }
-  if (cfg.serviceChargeEnabled) {
-    sc = roundTo(afterDiscount * cfg.serviceChargeRate / 100, 2);
-  }
+  if (cfg.vatEnabled) vat = roundTo(afterDiscount * cfg.vatRate / 100, 2);
+  if (cfg.serviceChargeEnabled) sc = roundTo(afterDiscount * cfg.serviceChargeRate / 100, 2);
 
   var grandTotal = roundTo(afterDiscount + vat + sc, 0);
 
   var html = '';
 
+  /* [Standard Version] Sales Channel */
+  var channels = ST.getActiveChannels();
+  if (channels.length > 1) {
+    html += '<div class="form-group">';
+    html += '<label class="form-label">🛵 ช่องทาง</label>';
+    html += '<div class="option-selector-sm" id="channelSelector">';
+    for (var ch = 0; ch < channels.length; ch++) {
+      var c = channels[ch];
+      var chActive = c.id === (POS.selectedChannel || 'ch_walkin') ? ' active' : '';
+      html += '<div class="opt-btn-sm' + chActive + '" data-id="' + sanitize(c.id) + '" data-name="' + sanitize(c.name) + '" onclick="selectPayChannel(this)">';
+      html += '<span>' + (c.emoji || '🏪') + '</span>';
+      html += '<span>' + sanitize(c.name) + '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+  }
+
   /* Summary */
   html += '<div class="card-glass p-16 mb-16">';
   html += '<div class="cart-row"><span>ยอดรวม</span><span>' + formatMoneySign(subtotal) + '</span></div>';
-  if (discountAmt > 0) {
-    html += '<div class="cart-row text-danger"><span>ส่วนลด</span><span>-' + formatMoneySign(discountAmt) + '</span></div>';
-  }
-  if (vat > 0) {
-    html += '<div class="cart-row"><span>VAT ' + cfg.vatRate + '%</span><span>+' + formatMoneySign(vat) + '</span></div>';
-  }
-  if (sc > 0) {
-    html += '<div class="cart-row"><span>SC ' + cfg.serviceChargeRate + '%</span><span>+' + formatMoneySign(sc) + '</span></div>';
-  }
+  if (discountAmt > 0) html += '<div class="cart-row text-danger"><span>ส่วนลด</span><span>-' + formatMoneySign(discountAmt) + '</span></div>';
+  if (vat > 0) html += '<div class="cart-row"><span>VAT ' + cfg.vatRate + '%</span><span>+' + formatMoneySign(vat) + '</span></div>';
+  if (sc > 0) html += '<div class="cart-row"><span>SC ' + cfg.serviceChargeRate + '%</span><span>+' + formatMoneySign(sc) + '</span></div>';
   html += '<div class="cart-row total"><span>💰 ยอดชำระ</span><span>' + formatMoneySign(grandTotal) + '</span></div>';
   html += '</div>';
 
@@ -506,33 +514,61 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
   html += '<div class="pay-method-icon">💵</div><div>เงินสด</div></div>';
   html += '<div class="pay-method" data-method="transfer" onclick="selectPayMethod(this)">';
   html += '<div class="pay-method-icon">📱</div><div>โอน</div></div>';
-  html += '<div class="pay-method" data-method="qr" onclick="selectPayMethod(this)">';
-  html += '<div class="pay-method-icon">📷</div><div>QR</div></div>';
+
+  /* QR PromptPay tab — show only if configured */
+  if (cfg.promptPayEnabled && cfg.promptPayId) {
+    html += '<div class="pay-method" data-method="promptpay" onclick="selectPayMethod(this)">';
+    html += '<div class="pay-method-icon">📷</div><div>QR</div></div>';
+  }
+
   html += '</div>';
   html += '</div>';
 
-  /* Cash received */
+  /* Cash section */
   html += '<div id="cashSection">';
   html += '<div class="form-group">';
   html += '<label class="form-label">เงินที่รับ</label>';
   html += '<input type="number" id="payReceived" inputmode="numeric" value="" placeholder="0" oninput="calcChange()" style="font-size:24px;text-align:center;font-weight:800;">';
   html += '</div>';
 
-  /* Quick cash buttons (from config) */
   html += '<div class="flex flex-wrap gap-6 mb-16">';
   html += '<button class="btn btn-success btn-sm" onclick="setPayReceived(' + grandTotal + ')">💰 พอดี ' + formatMoneySign(grandTotal) + '</button>';
   var quickList = cfg.quickCashAmounts || [20, 50, 100, 500, 1000];
   for (var qa = 0; qa < quickList.length; qa++) {
-    var amt = quickList[qa];
-    if (amt <= 0 || amt === grandTotal) continue;
-    html += '<button class="btn btn-secondary btn-sm" onclick="setPayReceived(' + amt + ')">' + formatMoneySign(amt) + '</button>';
+    if (quickList[qa] <= 0 || quickList[qa] === grandTotal) continue;
+    html += '<button class="btn btn-secondary btn-sm" onclick="setPayReceived(' + quickList[qa] + ')">' + formatMoneySign(quickList[qa]) + '</button>';
   }
   html += '</div>';
 
-  /* Change */
   html += '<div class="card-glass text-center p-16">';
   html += '<div class="text-muted fs-sm">เงินทอน</div>';
   html += '<div id="payChange" class="fw-800 text-success" style="font-size:36px;">฿0</div>';
+  html += '</div>';
+  html += '</div>';
+
+  /* [Standard Version] PromptPay QR section (hidden by default) */
+  if (cfg.promptPayEnabled && cfg.promptPayId) {
+    html += '<div id="promptPaySection" style="display:none;">';
+    html += '<div class="text-center p-16">';
+    html += '<div class="fw-700 mb-8">📱 สแกนจ่ายเงิน</div>';
+    if (cfg.promptPayName) {
+      html += '<div class="text-muted fs-sm mb-8">' + sanitize(cfg.promptPayName) + '</div>';
+    }
+    html += '<div class="qr-frame">';
+    html += '<img id="promptPayQR" src="' + getPromptPayQRUrl(cfg.promptPayId, grandTotal, 220) + '" alt="PromptPay QR" style="width:220px;height:220px;border-radius:8px;">';
+    html += '</div>';
+    html += '<div class="fw-800 text-accent mt-8" style="font-size:24px;">' + formatMoneySign(grandTotal) + '</div>';
+    html += '<div class="text-muted fs-sm mt-4">PromptPay: ' + sanitize(formatPromptPayId(cfg.promptPayId)) + '</div>';
+    html += '</div>';
+    html += '</div>';
+  }
+
+  /* Transfer section (hidden by default) */
+  html += '<div id="transferSection" style="display:none;">';
+  html += '<div class="text-center p-16 text-muted">';
+  html += '<div style="font-size:36px;margin-bottom:8px;">📱</div>';
+  html += '<div>ยอดโอน: <span class="fw-800 text-accent">' + formatMoneySign(grandTotal) + '</span></div>';
+  html += '<div class="fs-sm mt-4">กดยืนยันเมื่อรับเงินแล้ว</div>';
   html += '</div>';
   html += '</div>';
 
@@ -545,24 +581,45 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
 
   var footer = '';
   footer += '<button class="btn btn-secondary" onclick="closeMForce()">ยกเลิก</button>';
-  footer += '<button class="btn btn-success btn-lg" id="btnConfirmPay" onclick="confirmPayment()" style="flex:1;">✅ ยืนยันชำระเงิน</button>';
+  footer += '<button class="btn btn-success btn-lg" onclick="confirmPayment()" style="flex:1;">✅ ยืนยันชำระเงิน</button>';
 
   openModal('💳 ชำระเงิน', html, footer);
 }
 
+/* Format PromptPay ID for display */
+function formatPromptPayId(id) {
+  var clean = String(id).replace(/[^0-9]/g, '');
+  if (clean.length === 10) {
+    return clean.substring(0, 3) + '-' + clean.substring(3, 6) + '-' + clean.substring(6);
+  }
+  return clean;
+}
+
+/* Channel selector */
+function selectPayChannel(el) {
+  var parent = el.parentNode;
+  var siblings = parent.querySelectorAll('.opt-btn-sm');
+  for (var i = 0; i < siblings.length; i++) removeClass(siblings[i], 'active');
+  addClass(el, 'active');
+  POS.selectedChannel = el.getAttribute('data-id');
+  POS.selectedChannelName = el.getAttribute('data-name');
+  vibrate(20);
+}
+
 function selectPayMethod(el) {
   var siblings = el.parentNode.querySelectorAll('.pay-method');
-  for (var i = 0; i < siblings.length; i++) {
-    removeClass(siblings[i], 'active');
-  }
+  for (var i = 0; i < siblings.length; i++) removeClass(siblings[i], 'active');
   addClass(el, 'active');
   vibrate(20);
 
   var method = el.getAttribute('data-method');
   var cashSection = $('cashSection');
-  if (cashSection) {
-    cashSection.style.display = method === 'cash' ? '' : 'none';
-  }
+  var ppSection = $('promptPaySection');
+  var tfSection = $('transferSection');
+
+  if (cashSection) cashSection.style.display = method === 'cash' ? '' : 'none';
+  if (ppSection) ppSection.style.display = method === 'promptpay' ? '' : 'none';
+  if (tfSection) tfSection.style.display = method === 'transfer' ? '' : 'none';
 }
 
 function setPayReceived(amount) {
@@ -597,15 +654,15 @@ function confirmPayment() {
 
   if (method === 'cash') {
     received = parseFloat(($('payReceived') || {}).value) || 0;
-    if (received < total) {
-      toast('เงินที่รับไม่เพียงพอ', 'error');
-      return;
-    }
+    if (received < total) { toast('เงินที่รับไม่เพียงพอ', 'error'); return; }
     change = roundTo(received - total, 2);
   } else {
     received = total;
     change = 0;
   }
+
+  /* Normalize promptpay → qr for storage */
+  var paymentMethod = method === 'promptpay' ? 'qr' : method;
 
   var orderData = {
     subtotal: parseFloat(($('paySubtotal') || {}).value) || 0,
@@ -613,16 +670,15 @@ function confirmPayment() {
     vat: parseFloat(($('payVat') || {}).value) || 0,
     serviceCharge: parseFloat(($('paySC') || {}).value) || 0,
     total: total,
-    payment: method,
+    payment: paymentMethod,
     received: received,
     change: change
   };
 
   closeMForce();
+  if (typeof completeOrder === 'function') completeOrder(orderData);
+}
 
-  if (typeof completeOrder === 'function') {
-    completeOrder(orderData);
-  }
 }
 
 /* ============================================
