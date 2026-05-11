@@ -486,24 +486,6 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
 
   var html = '';
 
-  /* [Standard Version] Sales Channel */
-  var channels = ST.getActiveChannels();
-  if (channels.length > 1) {
-    html += '<div class="form-group">';
-    html += '<label class="form-label">🛵 ช่องทาง</label>';
-    html += '<div class="option-selector-sm" id="channelSelector">';
-    for (var ch = 0; ch < channels.length; ch++) {
-      var c = channels[ch];
-      var chActive = c.id === (POS.selectedChannel || 'ch_walkin') ? ' active' : '';
-      html += '<div class="opt-btn-sm' + chActive + '" data-id="' + sanitize(c.id) + '" data-name="' + sanitize(c.name) + '" onclick="selectPayChannel(this)">';
-      html += '<span>' + (c.emoji || '🏪') + '</span>';
-      html += '<span>' + sanitize(c.name) + '</span>';
-      html += '</div>';
-    }
-    html += '</div>';
-    html += '</div>';
-  }
-
   /* Summary */
   html += '<div class="card-glass p-16 mb-16">';
   html += '<div class="cart-row"><span>ยอดรวม</span><span>' + formatMoneySign(subtotal) + '</span></div>';
@@ -535,7 +517,7 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
   html += '<div id="cashSection">';
   html += '<div class="form-group">';
   html += '<label class="form-label">เงินที่รับ</label>';
-  html += '<input type="number" id="payReceived" inputmode="numeric" value="" placeholder="0" oninput="calcChange()" style="font-size:24px;text-align:center;font-weight:800;">';
+  html += '<input type="number" id="payReceived" inputmode="numeric" value="' + grandTotal + '" placeholder="0" oninput="calcChange()" style="font-size:24px;text-align:center;font-weight:800;">';
   html += '</div>';
 
   html += '<div class="flex flex-wrap gap-6 mb-16">';
@@ -591,6 +573,11 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
   footer += '<button class="btn btn-success btn-lg" onclick="confirmPayment()" style="flex:1;">✅ ยืนยันชำระเงิน</button>';
 
   openModal('💳 ชำระเงิน', html, footer);
+
+  /* Auto calc change after modal opens */
+  setTimeout(function() {
+    calcChange();
+  }, 200);
 }
 
 /* Format PromptPay ID for display */
@@ -600,17 +587,6 @@ function formatPromptPayId(id) {
     return clean.substring(0, 3) + '-' + clean.substring(3, 6) + '-' + clean.substring(6);
   }
   return clean;
-}
-
-/* Channel selector */
-function selectPayChannel(el) {
-  var parent = el.parentNode;
-  var siblings = parent.querySelectorAll('.opt-btn-sm');
-  for (var i = 0; i < siblings.length; i++) removeClass(siblings[i], 'active');
-  addClass(el, 'active');
-  POS.selectedChannel = el.getAttribute('data-id');
-  POS.selectedChannelName = el.getAttribute('data-name');
-  vibrate(20);
 }
 
 function selectPayMethod(el) {

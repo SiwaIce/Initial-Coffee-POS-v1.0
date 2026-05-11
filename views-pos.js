@@ -811,6 +811,25 @@ function renderCartSummary() {
 function renderCartActions() {
   var html = '<div class="cart-actions">';
 
+  /* [Standard Version] Sales Channel */
+  var channels = ST.getActiveChannels();
+  if (channels.length > 1) {
+    html += '<div class="form-group" style="margin-bottom:8px;">';
+    html += '<label class="form-label" style="margin-bottom:4px;">🛵 ช่องทาง</label>';
+    html += '<div class="option-selector-sm" id="cartChannelSelector">';
+    for (var ch = 0; ch < channels.length; ch++) {
+      var c = channels[ch];
+      var chActive = c.id === (POS.selectedChannel || 'ch_walkin') ? ' active' : '';
+      html += '<div class="opt-btn-sm' + chActive + '" data-id="' + sanitize(c.id) + '" data-name="' + sanitize(c.name) + '" onclick="selectCartChannel(this)">';
+      html += '<span>' + (c.emoji || '🏪') + '</span>';
+      html += '<span>' + sanitize(c.name) + '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+  }
+
+  /* Payment methods */
   html += '<div class="payment-methods">';
   html += '<div class="pay-method active" data-method="cash" onclick="selectCartPayMethod(this)">';
   html += '<div class="pay-method-icon">💵</div><div>เงินสด</div></div>';
@@ -820,6 +839,7 @@ function renderCartActions() {
   html += '<div class="pay-method-icon">📷</div><div>QR</div></div>';
   html += '</div>';
 
+  /* Pay button */
   var disabled = POS.cart.length === 0 ? ' disabled' : '';
   var total = calcGrandTotal();
   html += '<button class="btn-pay' + disabled + '" id="btnPay" onclick="onPayClick()"' + disabled + '>';
@@ -837,6 +857,16 @@ function selectCartPayMethod(el) {
     removeClass(siblings[i], 'active');
   }
   addClass(el, 'active');
+  vibrate(20);
+}
+
+function selectCartChannel(el) {
+  var parent = el.parentNode;
+  var siblings = parent.querySelectorAll('.opt-btn-sm');
+  for (var i = 0; i < siblings.length; i++) removeClass(siblings[i], 'active');
+  addClass(el, 'active');
+  POS.selectedChannel = el.getAttribute('data-id');
+  POS.selectedChannelName = el.getAttribute('data-name');
   vibrate(20);
 }
 
@@ -1034,7 +1064,8 @@ function completeOrder(orderData) {
   POS.cart = [];
   POS.discount = 0;
   POS.discountType = 'baht';
-
+  POS.selectedChannel = 'ch_walkin';
+  POS.selectedChannelName = 'Walk-in';
   /* Refresh UI */
   refreshCartUI();
 
