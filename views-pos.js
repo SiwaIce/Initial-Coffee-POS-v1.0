@@ -3,6 +3,13 @@
    หน้า POS หลัก
    Version: 2.0 (Sweet + DrinkType + Recent)
    ============================================ */
+/* ตรวจสอบว่า formatNumber มีอยู่แล้ว ถ้าไม่มีให้สร้าง */
+if (typeof formatNumber === 'undefined') {
+  function formatNumber(n) {
+    if (n === null || n === undefined || isNaN(n)) return '0';
+    return parseFloat(n).toLocaleString('th-TH');
+  }
+}
 
 /* === POS STATE === */
 var POS = {
@@ -13,9 +20,16 @@ var POS = {
   discountType: 'baht',
   drawerOpen: false,
   selectedChannel: 'ch_walkin',
-  selectedChannelName: 'Walk-in'
+  selectedChannelName: 'Walk-in',
+  selectedMember: null,
+  useMemberPoints: false,
+  memberPointsDiscount: 0,
+  editingHoldOrderId: null 
 };
 
+/* ============================================
+   RENDER POS VIEW
+   ============================================ */
 /* ============================================
    RENDER POS VIEW
    ============================================ */
@@ -44,7 +58,7 @@ function renderPOSView() {
 
   /* === LEFT: Menu Area === */
   html += '<div class="pos-menu">';
-
+  
   /* Search */
   html += '<div class="pos-menu-header">';
   html += '<div class="pos-search">';
@@ -53,11 +67,14 @@ function renderPOSView() {
   html += '</div>';
   html += '</div>';
 
-    /* Favorites Row */
+  /* Favorites Row */
   html += renderFavoritesRow();
 
   /* Recent Orders Strip */
   html += renderRecentOrders();
+
+  /* ===== NEW: Hold Orders Strip (ย้ายมาอยู่ตรงนี้) ===== */
+  html += renderHoldOrdersStrip();
 
   /* Category Tabs */
   html += renderCatTabs();
@@ -89,9 +106,20 @@ function renderPOSView() {
   html += '</div>';
 
   main.innerHTML = html;
+  
+ /* Update hold orders count only, not full refresh */
+if (window.holdOrdersInterval) clearInterval(window.holdOrdersInterval);
+window.holdOrdersInterval = setInterval(function() {
+  var count = ST.getHoldOrders().length;
+  var countEl = $('holdOrdersCount');
+  if (countEl) countEl.textContent = count;
+  
+  /* Also update the hold strip count without re-rendering whole strip */
+  var stripCountEl = $('#holdStripCount');
+  if (stripCountEl) stripCountEl.textContent = count;
+}, 5000);
 
-/* ไม่ auto focus — ให้ user กดเองเมื่อต้องการค้นหา */}
-
+}
 /* ============================================
    RECENT ORDERS STRIP
    ============================================ */
@@ -107,22 +135,24 @@ function renderRecentOrders() {
   if (recent.length === 0) return '';
 
   var cfg = ST.getConfig();
+  var isHidden = localStorage.getItem('recentStripHidden') === 'true';
+  
   var html = '';
   html += '<div class="recent-orders-strip" id="recentStrip">';
 
-  /* Header */
+  /* Header - ไม่มีปุ่มเลื่อน */
   html += '<div class="recent-header">';
   html += '<div class="flex gap-8" style="align-items:center;">';
   html += '<span class="fw-600 fs-sm">🕐 ออเดอร์ล่าสุด</span>';
   html += '<span class="badge badge-accent">' + recent.length + '</span>';
   html += '</div>';
-  html += '<button class="btn-icon" onclick="toggleRecentStrip()" style="width:28px;height:28px;font-size:14px;" title="ซ่อน/แสดง">';
-  html += '<span id="recentToggleIcon">▾</span>';
+  html += '<button class="toggle-strip-btn" onclick="toggleRecentStrip()" style="width:28px;height:28px;">';
+  html += '<span id="recentToggleIcon">' + (isHidden ? '▸' : '▾') + '</span>';
   html += '</button>';
   html += '</div>';
 
-  /* Scrollable cards */
-  html += '<div class="recent-scroll" id="recentScroll">';
+  /* Scrollable cards - ใช้นิ้วเลื่อนได้ */
+  html += '<div class="recent-scroll" id="recentScroll" style="' + (isHidden ? 'display:none;' : '') + '">';
   for (var r = 0; r < recent.length; r++) {
     html += renderRecentCard(recent[r], cfg);
   }
@@ -211,7 +241,7 @@ function getTimeAgo(timestamp) {
   return Math.floor(hrs / 24) + ' วันก่อน';
 }
 
-/* Toggle show/hide */
+/* Toggle show/hide recent orders */
 function toggleRecentStrip() {
   var scroll = $('recentScroll');
   var icon = $('recentToggleIcon');
@@ -666,7 +696,7 @@ function cartItemCount() {
    ============================================ */
 function renderCart() {
   var html = '';
-
+  
   /* Header */
   html += '<div class="cart-header">';
   html += '<div class="flex" style="align-items:center;">';
@@ -675,12 +705,17 @@ function renderCart() {
     html += '<span class="cart-count">' + cartItemCount() + '</span>';
   }
   html += '</div>';
+  html += '<div class="flex gap-6">';
   if (POS.cart.length > 0) {
     html += '<button class="btn btn-sm btn-outline" onclick="clearCart()" style="color:var(--danger);border-color:var(--danger);">🗑 ล้าง</button>';
   }
   html += '</div>';
-
-  /* Items */
+  html += '</div>';
+  
+  /* Member Selector */
+  html += renderMemberSelector();
+  
+  /* Cart Items */
   html += '<div class="cart-items">';
   if (POS.cart.length === 0) {
     html += '<div class="cart-empty">';
@@ -694,13 +729,24 @@ function renderCart() {
     }
   }
   html += '</div>';
-
-  /* Summary + Actions */
+  
+  /* Cart Summary + Actions */
   if (POS.cart.length > 0) {
     html += renderCartSummary();
-    html += renderCartActions();
+    
+    /* Actions Section - เหลือแค่ 2 ปุ่ม */
+    html += '<div class="cart-actions" style="padding:10px 12px 14px;border-top:1px solid var(--border);">';
+    
+    /* Action Buttons */
+    var total = calcGrandTotal();
+    html += '<div class="cart-action-buttons" style="display:flex;gap:8px;">';
+    html += '<button class="btn-secondary" onclick="saveAsHoldOrder()" style="flex:1;background:transparent;border:1px solid var(--border);color:var(--text-secondary);padding:10px 6px;font-size:13px;font-weight:600;border-radius:var(--radius);cursor:pointer;">💾 เก็บออเดอร์</button>';
+    html += '<button class="btn-pay" onclick="onPayClick()" style="flex:2;background:linear-gradient(135deg,var(--success),#16a34a);color:#fff;border:none;padding:10px 8px;font-size:15px;font-weight:800;border-radius:var(--radius);cursor:pointer;">💳 ชำระเงิน ' + formatMoneySign(total) + '</button>';
+    html += '</div>';
+    
+    html += '</div>';
   }
-
+  
   return html;
 }
 
@@ -760,9 +806,9 @@ function renderCartSummary() {
 
   /* Discount */
   html += '<div class="cart-discount-row">';
-  html += '<span class="text-muted fs-sm" style="white-space:nowrap;">ส่วนลด:</span>';
-  html += '<input type="number" id="cartDiscount" value="' + (POS.discount || '') + '" placeholder="0" inputmode="numeric" oninput="onCartDiscountChange()">';
-  html += '<select id="cartDiscountType" onchange="onCartDiscountChange()" style="width:70px;">';
+  html += '<span class="text-muted fs-sm">ส่วนลด:</span>';
+  html += '<input type="number" id="cartDiscount" value="' + (POS.discount || '') + '" placeholder="0" inputmode="numeric" oninput="onCartDiscountChange()" style="width:60px;">';
+  html += '<select id="cartDiscountType" onchange="onCartDiscountChange()" style="width:60px;">';
   html += '<option value="baht"' + (POS.discountType === 'baht' ? ' selected' : '') + '>฿</option>';
   html += '<option value="percent"' + (POS.discountType === 'percent' ? ' selected' : '') + '>%</option>';
   html += '</select>';
@@ -1039,10 +1085,24 @@ function quickCompleteOrder(method) {
    ============================================ */
 function completeOrder(orderData) {
   var cfg = ST.getConfig();
+  
+  /* Check if this is from hold order payment */
+  if (window._currentPayHoldId) {
+    completeHoldOrderPayment(orderData);
+    return;
+  }
+
+  /* === NEW: Auto deduct stock if Pro feature enabled === */
+  if (FeatureManager.isEnabled('pro_autostock')) {
+    var deducted = ST.autoDeductStock(POS.cart);
+    if (deducted && deducted.length > 0) {
+      console.log('[AutoStock] Deducted:', deducted);
+    }
+  }
 
   var order = {
     items: cloneObj(POS.cart),
-        channel: POS.selectedChannel || 'ch_walkin',
+    channel: POS.selectedChannel || 'ch_walkin',
     channelName: POS.selectedChannelName || 'Walk-in',
     subtotal: orderData.subtotal,
     discount: orderData.discount,
@@ -1060,13 +1120,46 @@ function completeOrder(orderData) {
 
   var saved = ST.addOrder(order);
 
+  /* ===== NEW: Send to Kitchen Display ===== */
+  if (typeof FeatureManager !== 'undefined' && FeatureManager.isEnabled('pro_kds')) {
+    if (typeof KitchenDisplay !== 'undefined') {
+      KitchenDisplay.sendOrderToKitchen(saved);
+    }
+  }
+
+ /* Add points to member if selected */
+  if (FeatureManager.isEnabled('pro_members') && POS.selectedMember) {
+    var cfg = ST.getConfig();
+    var pointRate = cfg.pointRate || 100;
+    var earnedPoints = Math.floor(orderData.total / pointRate);
+    
+    if (earnedPoints > 0) {
+      ST.addMemberPoints(POS.selectedMember.id, earnedPoints, 'ซื้อสินค้า', saved.id);
+      toast('⭐ ได้รับ ' + earnedPoints + ' แต้ม', 'success', 2000);
+    }
+    
+    /* Deduct used points */
+    if (POS.useMemberPoints && POS.memberPointsDiscount > 0) {
+      var pointValue = cfg.pointValue || 1;
+      var usedPoints = Math.ceil(POS.memberPointsDiscount / pointValue);
+      if (usedPoints > 0) {
+        ST.useMemberPoints(POS.selectedMember.id, usedPoints, 'ใช้แต้มลดจากออเดอร์ #' + saved.number, POS.memberPointsDiscount);
+      }
+    }
+  }
+  
+  // Reset member selection
+  POS.selectedMember = null;
+  POS.useMemberPoints = false;
+  POS.memberPointsDiscount = 0;
+
   /* Reset cart */
   POS.cart = [];
   POS.discount = 0;
   POS.discountType = 'baht';
   POS.selectedChannel = 'ch_walkin';
   POS.selectedChannelName = 'Walk-in';
-  /* Refresh UI */
+  
   refreshCartUI();
 
   /* Refresh recent orders strip */
@@ -1181,103 +1274,767 @@ document.addEventListener('touchend', function() {
 }, { passive: true });
 
 /* ============================================
-   CSS: RECENT ORDERS STRIP
+   CSS: RECENT ORDERS STRIP + HOLD ORDERS + CART
    ============================================ */
 (function() {
-  var styleId = 'recentStripStyle';
+  var styleId = 'posViewStyle';
   if (document.getElementById(styleId)) return;
 
   var css = '';
 
-  css += '.recent-orders-strip{';
-  css += 'background:var(--bg-secondary);';
-  css += 'border-bottom:1px solid var(--border);';
-  css += 'padding:0;';
-  css += 'flex-shrink:0;';
-  css += '}';
-
-  css += '.recent-header{';
-  css += 'display:flex;align-items:center;justify-content:space-between;';
-  css += 'padding:8px 16px;';
-  css += '}';
-
-  css += '.recent-scroll{';
-  css += 'display:flex;gap:10px;';
-  css += 'padding:0 16px 10px;';
-  css += 'overflow-x:auto;';
-  css += '-ms-overflow-style:none;scrollbar-width:none;';
-  css += '}';
+  /* Recent Orders Strip */
+  css += '.recent-orders-strip{background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:0;flex-shrink:0;}';
+  css += '.recent-header{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;}';
+  css += '.recent-scroll{display:flex;gap:10px;padding:0 16px 10px;overflow-x:auto;-ms-overflow-style:none;scrollbar-width:none;}';
   css += '.recent-scroll::-webkit-scrollbar{display:none;}';
-
-  css += '.recent-card{';
-  css += 'min-width:200px;max-width:240px;';
-  css += 'background:var(--bg-card);';
-  css += 'border:1px solid var(--border);';
-  css += 'border-radius:var(--radius-sm);';
-  css += 'padding:10px 12px;';
-  css += 'flex-shrink:0;';
-  css += 'transition:all var(--transition);';
-  css += 'cursor:default;';
-  css += '}';
+  css += '.recent-card{min-width:200px;max-width:240px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;flex-shrink:0;transition:all var(--transition);cursor:default;}';
   css += '.recent-card:hover{border-color:var(--accent);box-shadow:0 2px 12px rgba(0,0,0,0.15);}';
-
   css += '.recent-items{display:flex;flex-direction:column;gap:1px;}';
-  css += '.recent-item-line{';
-  css += 'display:flex;justify-content:space-between;gap:8px;';
-  css += 'font-size:12px;line-height:1.5;';
-  css += '}';
-
-  css += '.recent-btn{';
-  css += 'width:28px;height:28px;';
-  css += 'display:flex;align-items:center;justify-content:center;';
-  css += 'border-radius:6px;font-size:14px;';
-  css += 'background:var(--glass);border:1px solid var(--border);';
-  css += 'cursor:pointer;transition:all var(--transition);';
-  css += '}';
+  css += '.recent-item-line{display:flex;justify-content:space-between;gap:8px;font-size:12px;line-height:1.5;}';
+  css += '.recent-btn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:14px;background:var(--glass);border:1px solid var(--border);cursor:pointer;transition:all var(--transition);}';
   css += '.recent-btn:hover{border-color:var(--accent);background:rgba(249,115,22,0.1);}';
   css += '.recent-btn:active{transform:scale(0.9);}';
-    /* Recent item tags */
   css += '.recent-item-tags{display:flex;gap:3px;flex-wrap:wrap;margin:1px 0;}';
-  css += '.recent-tag{';
-  css += 'display:inline-block;padding:1px 5px;font-size:9px;font-weight:600;';
-  css += 'border-radius:3px;background:rgba(249,115,22,0.12);color:var(--accent);';
-  css += 'line-height:1.4;';
-  css += '}';
+  css += '.recent-tag{display:inline-block;padding:1px 5px;font-size:9px;font-weight:600;border-radius:3px;background:rgba(249,115,22,0.12);color:var(--accent);line-height:1.4;}';
   css += '.recent-item-sub{font-size:10px;color:var(--text-muted);margin:1px 0;}';
-/* [Standard Version] Favorites */
+
+  /* Favorites */
   css += '.fav-row{background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:6px 16px 8px;flex-shrink:0;}';
   css += '.fav-header{margin-bottom:4px;}';
   css += '.fav-scroll{display:flex;gap:8px;overflow-x:auto;-ms-overflow-style:none;scrollbar-width:none;}';
   css += '.fav-scroll::-webkit-scrollbar{display:none;}';
-  css += '.fav-item{display:flex;align-items:center;gap:6px;padding:6px 12px;';
-  css += 'background:var(--bg-card);border:1px solid var(--border);border-radius:20px;';
-  css += 'cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all var(--transition);position:relative;}';
+  css += '.fav-item{display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:20px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all var(--transition);position:relative;}';
   css += '.fav-item:hover{border-color:var(--accent);}';
   css += '.fav-item:active{transform:scale(0.95);}';
   css += '.fav-emoji{font-size:18px;}';
   css += '.fav-name{font-size:12px;font-weight:600;}';
   css += '.fav-price{font-size:11px;color:var(--accent);font-weight:700;}';
-  css += '.fav-badge{position:absolute;top:-4px;right:-4px;background:var(--accent);color:#fff;';
-  css += 'font-size:10px;font-weight:800;min-width:16px;height:16px;border-radius:8px;';
-  css += 'display:flex;align-items:center;justify-content:center;padding:0 3px;}';
-
-  /* Favorite button on menu item */
-  css += '.fav-btn{position:absolute;top:4px;left:4px;width:24px;height:24px;';
-  css += 'display:flex;align-items:center;justify-content:center;font-size:14px;';
-  css += 'background:transparent;border:none;cursor:pointer;opacity:0.3;transition:all var(--transition);z-index:2;}';
+  css += '.fav-badge{position:absolute;top:-4px;right:-4px;background:var(--accent);color:#fff;font-size:10px;font-weight:800;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;}';
+  css += '.fav-btn{position:absolute;top:4px;left:4px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:14px;background:transparent;border:none;cursor:pointer;opacity:0.3;transition:all var(--transition);z-index:2;}';
   css += '.fav-btn:hover,.fav-btn.active{opacity:1;}';
   css += '.fav-btn.active{color:var(--accent);}';
 
+  /* Member Selector */
+  css += '.member-selector{border:1px solid var(--border);background:var(--bg-card);border-radius:var(--radius);padding:12px;}';
+  css += '.member-search-item:hover{background:var(--glass);}';
+  css += '.member-points-toggle{flex-shrink:0;}';
+  css += '.member-search-avatar{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:800;flex-shrink:0;}';
+  css += '.member-search-item{display:flex;align-items:center;gap:12px;padding:12px;border-bottom:1px solid var(--border);cursor:pointer;transition:all var(--transition);}';
+  css += '.member-search-item:last-child{border-bottom:none;}';
+
+  /* Cart Layout */
+  css += '.pos-cart{width:360px;display:flex;flex-direction:column;background:var(--bg-secondary);border-left:1px solid var(--border);height:100%;}';
+  css += '.cart-items{flex:1;overflow-y:auto;padding:0;}';
+  css += '.cart-item{padding:8px 12px;border-bottom:1px solid var(--border);}';
+  css += '.cart-item-name{font-size:13px;font-weight:600;}';
+  css += '.cart-item-detail{font-size:10px;color:var(--text-muted);margin-top:2px;}';
+  css += '.cart-item-price{font-size:13px;font-weight:700;color:var(--accent);}';
+  css += '.cart-item-qty{display:flex;align-items:center;gap:6px;margin-top:4px;}';
+  css += '.qty-btn{width:24px;height:24px;display:flex;align-items:center;justify-content:center;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;}';
+  css += '.qty-btn.danger:hover{border-color:var(--danger);color:var(--danger);}';
+  css += '.qty-val{font-size:13px;font-weight:700;min-width:24px;text-align:center;}';
+
+  /* Cart Summary */
+  css += '.cart-summary{padding:10px 12px;border-top:1px solid var(--border);background:var(--bg-card);}';
+  css += '.cart-row{display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px;}';
+  css += '.cart-row.total{font-size:20px;font-weight:800;color:var(--accent);margin-top:6px;padding-top:6px;border-top:2px solid var(--accent);}';
+  css += '.cart-discount-row{display:flex;align-items:center;gap:6px;margin:6px 0;}';
+  css += '.cart-discount-row input{width:60px;padding:4px;text-align:center;font-size:12px;}';
+  css += '.cart-discount-row select{width:60px;padding:4px;font-size:11px;}';
+
+  /* Cart Actions */
+  css += '.cart-actions{padding:10px 12px 14px;border-top:1px solid var(--border);}';
+  css += '.form-group{margin-bottom:8px;}';
+  css += '.form-label{font-size:10px;margin-bottom:2px;}';
+  css += '.option-selector-sm{display:flex;gap:4px;flex-wrap:wrap;}';
+  css += '.opt-btn-sm{padding:4px 6px;font-size:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);cursor:pointer;flex:1;text-align:center;}';
+  css += '.opt-btn-sm.active{border-color:var(--accent);background:rgba(249,115,22,0.1);color:var(--accent);}';
+  css += '.payment-methods{display:flex;gap:4px;margin-bottom:0;}';
+  css += '.pay-method{flex:1;padding:6px 2px;border-radius:var(--radius-sm);background:var(--bg-card);border:1px solid var(--border);text-align:center;cursor:pointer;}';
+  css += '.pay-method.active{border-color:var(--accent);background:rgba(249,115,22,0.15);color:var(--accent);}';
+  css += '.pay-method-icon{font-size:14px;}';
+  css += '.pay-method div{font-size:10px;}';
+
+  /* Buttons */
+  css += '.cart-action-buttons{display:flex;gap:8px;margin-top:8px;}';
+  css += '.btn-pay{flex:2;background:linear-gradient(135deg,var(--success),#16a34a);color:#fff;border:none;padding:10px 8px;font-size:15px;font-weight:800;border-radius:var(--radius);cursor:pointer;box-shadow:0 3px 10px rgba(34,197,94,0.3);}';
+  css += '.btn-pay:hover{transform:translateY(-1px);box-shadow:0 5px 15px rgba(34,197,94,0.4);}';
+  css += '.cart-action-buttons .btn-secondary{flex:1;background:transparent;border:1px solid var(--border);color:var(--text-secondary);padding:10px 6px;font-size:12px;font-weight:600;border-radius:var(--radius);cursor:pointer;}';
+  css += '.cart-action-buttons .btn-secondary:hover{border-color:var(--accent);color:var(--accent);background:rgba(249,115,22,0.05);}';
+
+  /* Hold Orders Strip (แนวนอน) */
+  css += '.hold-orders-strip{background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:6px 0 8px 0;flex-shrink:0;}';
+  css += '.hold-strip-header{padding:4px 16px 6px;}';
+  css += '.hold-strip-scroll{display:flex;gap:10px;padding:0 16px;overflow-x:auto;}';
+  css += '.hold-strip-scroll::-webkit-scrollbar{display:none;}';
+  css += '.hold-strip-card{min-width:170px;max-width:200px;background:var(--bg-card);border:1px solid var(--warning);border-radius:var(--radius-sm);padding:8px 10px;flex-shrink:0;cursor:pointer;transition:all var(--transition);}';
+  css += '.hold-strip-card:hover{border-color:var(--accent);transform:translateY(-1px);}';
+  css += '.hold-strip-number{font-weight:800;font-size:13px;color:var(--accent);}';
+  css += '.hold-strip-time{font-size:10px;color:var(--text-muted);margin-bottom:4px;}';
+  css += '.hold-strip-items{font-size:11px;color:var(--text-secondary);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}';
+  css += '.hold-strip-total{font-weight:700;font-size:13px;color:var(--accent);margin-bottom:4px;}';
+  css += '.hold-strip-status{display:inline-block;}';
+
+  /* Menu width adjustment */
+  css += '.pos-menu{flex:2;min-width:0;}';
+  css += '.pos-cart{width:360px;flex-shrink:0;}';
+
+  /* Responsive */
+  css += '@media(max-width:1200px){';
+  css += '.pos-menu{flex:1.5;}';
+  css += '.pos-cart{width:320px;}';
+  css += '}';
+  css += '@media(max-width:1024px){';
+  css += '.pos-cart{width:280px;}';
+  css += '}';
   css += '@media(max-width:768px){';
+  css += '.pos-cart{display:none;}';
+  css += '.pos-layout{flex-direction:column;}';
   css += '.recent-header{padding:6px 12px;}';
   css += '.recent-scroll{padding:0 12px 8px;gap:8px;}';
   css += '.recent-card{min-width:170px;max-width:200px;padding:8px 10px;}';
   css += '}';
+/* Header ของ Recent Orders และ Hold Orders - ให้ปุ่มซ่อนอยู่ขวาสุด */
+css += '.recent-header{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;}';
+css += '.hold-strip-header{display:flex;align-items:center;justify-content:space-between;padding:4px 16px 6px;}';
+
+/* ปุ่มซ่อน/แสดง - ทำให้เด่นขึ้น */
+css += '.toggle-strip-btn{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);background:var(--bg-card);border:1px solid var(--border);cursor:pointer;transition:all var(--transition);font-size:16px;color:var(--text-secondary);}';
+css += '.toggle-strip-btn:hover{background:var(--glass);border-color:var(--accent);color:var(--accent);transform:scale(1.05);}';
+css += '.toggle-strip-btn:active{transform:scale(0.95);}';
+
+/* Scroll buttons */
+css += '.scroll-btn:hover{background:var(--glass);border-color:var(--accent);color:var(--accent);}';
+css += '.scroll-btn:active{transform:scale(0.9);}';
+
+/* Empty hold strip */
+css += '.hold-empty-strip{text-align:center;padding:12px;color:var(--text-muted);font-size:12px;min-width:200px;}';
 
   var style = document.createElement('style');
   style.id = styleId;
   style.textContent = css;
   document.head.appendChild(style);
 })();
+
+/* ============================================
+   MEMBER SELECTOR IN CART
+   ============================================ */
+var POS = {
+  cart: [],
+  selectedCat: 'all',
+  searchQuery: '',
+  discount: 0,
+  discountType: 'baht',
+  drawerOpen: false,
+  selectedChannel: 'ch_walkin',
+  selectedChannelName: 'Walk-in',
+  selectedMember: null,        // NEW
+  useMemberPoints: false,       // NEW
+  memberPointsDiscount: 0       // NEW
+};
+
+/* ============================================
+   MEMBER SELECTOR IN CART (ปรับปรุงใหม่)
+   ============================================ */
+function renderMemberSelector() {
+  if (typeof FeatureManager !== 'undefined' && !FeatureManager.isEnabled('pro_members')) return '';
+  
+  var member = POS.selectedMember;
+  
+  var html = '<div class="member-selector card mb-12" style="padding:12px;background:var(--bg-card);border-radius:var(--radius);">';
+  html += '<div class="flex-between" style="margin-bottom:8px;">';
+  html += '<div class="fw-600"><span style="font-size:16px;">👤</span> สมาชิก</div>';
+  
+  if (member) {
+    html += '<button class="btn btn-sm btn-outline" onclick="clearSelectedMember()" style="padding:4px 12px;">เปลี่ยน</button>';
+  } else {
+    html += '<button class="btn btn-sm btn-primary" onclick="showMemberSearchModal()" style="padding:4px 12px;background:linear-gradient(135deg,var(--accent),var(--accent2));">➕ เลือกสมาชิก</button>';
+  }
+  html += '</div>';
+  
+  if (member) {
+    var pointsWorth = (member.points || 0) * ((ST.getConfig().pointValue || 1));
+    html += '<div class="flex-between" style="margin-top:4px;">';
+    html += '<div>';
+    html += '<div class="fw-700">' + sanitize(member.name) + '</div>';
+    html += '<div class="text-muted fs-sm">📱 ' + (member.phone ? formatPhoneNumber(member.phone) : 'ไม่มีเบอร์') + '</div>';
+    html += '<div class="text-muted fs-sm">⭐ ' + formatNumber(member.points || 0) + ' แต้ม (มูลค่า ' + formatMoneySign(pointsWorth) + ')</div>';
+    html += '</div>';
+    
+    if ((member.points || 0) > 0) {
+      html += '<div class="member-points-toggle">';
+      html += '<label class="toggle-wrap" onclick="toggleUseMemberPoints()" style="gap:6px;">';
+      html += '<div class="toggle' + (POS.useMemberPoints ? ' on' : '') + '" id="memberPointsToggle" style="width:36px;height:20px;"></div>';
+      html += '<span class="fs-sm">ใช้แต้ม</span>';
+      html += '</label>';
+      html += '</div>';
+    }
+    html += '</div>';
+    
+    if (POS.useMemberPoints && POS.memberPointsDiscount > 0) {
+      html += '<div class="cart-row text-success mt-8" style="font-size:13px;border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">';
+      html += '<span>💎 ส่วนลดจากแต้ม</span>';
+      html += '<span class="fw-700">-' + formatMoneySign(POS.memberPointsDiscount) + '</span>';
+      html += '</div>';
+    }
+  } else {
+    html += '<div class="text-center text-muted fs-sm" style="padding:8px 0;">';
+    html += '⚠️ ยังไม่เลือกสมาชิก (เลือกเพื่อสะสมแต้ม)';
+    html += '</div>';
+  }
+  
+  html += '</div>';
+  return html;
+}
+
+function showMemberSearchModal() {
+  var members = ST.getMembers();
+  
+  var html = '';
+  html += '<div class="form-group">';
+  html += '<label class="form-label">🔍 ค้นหา (ชื่อ หรือ เบอร์โทร)</label>';
+  html += '<input type="text" id="memberSearchInput" placeholder="พิมพ์ชื่อหรือเบอร์..." oninput="filterMemberSearchList()" style="font-size:16px;">';
+  html += '</div>';
+  
+  html += '<div id="memberSearchList" class="member-search-list" style="max-height:400px;overflow-y:auto;">';
+  
+  if (members.length === 0) {
+    html += '<div class="text-center text-muted p-20">';
+    html += '<div style="font-size:48px;margin-bottom:12px;">👤</div>';
+    html += '<div>ยังไม่มีสมาชิก</div>';
+    html += '<button class="btn btn-primary btn-sm mt-12" onclick="closeMForce();modalEditMember(null)">➕ เพิ่มสมาชิกใหม่</button>';
+    html += '</div>';
+  } else {
+    for (var i = 0; i < members.length; i++) {
+      html += renderMemberSearchItem(members[i]);
+    }
+  }
+  
+  html += '</div>';
+  
+  var footer = '';
+  footer += '<button class="btn btn-secondary" onclick="closeMForce()">ปิด</button>';
+  footer += '<button class="btn btn-primary" onclick="closeMForce();modalEditMember(null)">➕ เพิ่มสมาชิกใหม่</button>';
+  
+  openModal('👤 เลือกสมาชิก', html, footer, { wide: true });
+}
+
+function renderMemberSearchItem(member) {
+  var pointsWorth = (member.points || 0) * ((ST.getConfig().pointValue || 1));
+  
+  return '<div class="member-search-item" onclick="selectMember(\'' + member.id + '\')" style="' +
+    'display:flex;align-items:center;gap:12px;padding:12px;border-bottom:1px solid var(--border);cursor:pointer;transition:all var(--transition);' +
+    'hover:background:var(--glass);">' +
+    '<div class="member-search-avatar" style="' +
+    'width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));' +
+    'display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:800;flex-shrink:0;">' +
+    (member.name ? member.name.charAt(0).toUpperCase() : '?') + '</div>' +
+    '<div class="member-search-info" style="flex:1;">' +
+    '<div class="fw-700" style="font-size:15px;">' + sanitize(member.name) + '</div>' +
+    '<div class="text-muted fs-sm">📱 ' + (member.phone ? formatPhoneNumber(member.phone) : 'ไม่มีเบอร์') + '</div>' +
+    '<div class="flex gap-12 mt-4">' +
+    '<span class="fs-sm" style="color:var(--accent);">⭐ ' + formatNumber(member.points || 0) + ' แต้ม</span>' +
+    '<span class="fs-sm">💰 ' + formatMoneySign(member.totalSpent || 0) + '</span>' +
+    '<span class="fs-sm text-muted">💎 ค่าแต้ม ' + formatMoneySign(pointsWorth) + '</span>' +
+    '</div>' +
+    '</div>' +
+    '<div style="flex-shrink:0;">' +
+    '<button class="btn btn-sm btn-primary" style="padding:6px 16px;">เลือก</button>' +
+    '</div>' +
+    '</div>';
+}
+function filterMemberSearchList() {
+  var searchVal = ($('memberSearchInput') || {}).value || '';
+  var members = ST.getMembers();
+  var filtered = [];
+  
+  for (var i = 0; i < members.length; i++) {
+    if (searchVal === '' || 
+        members[i].name.toLowerCase().indexOf(searchVal.toLowerCase()) !== -1 ||
+        (members[i].phone && members[i].phone.indexOf(searchVal) !== -1)) {
+      filtered.push(members[i]);
+    }
+  }
+  
+  var container = $('memberSearchList');
+  if (container) {
+    var html = '';
+    for (var j = 0; j < filtered.length; j++) {
+      html += renderMemberSearchItem(filtered[j]);
+    }
+    if (filtered.length === 0) {
+      html += '<div class="text-center text-muted p-16">ไม่พบสมาชิก</div>';
+    }
+    container.innerHTML = html;
+  }
+}
+
+function selectMember(memberId) {
+  var member = ST.getMemberById(memberId);
+  if (member) {
+    POS.selectedMember = member;
+    POS.useMemberPoints = false;
+    POS.memberPointsDiscount = 0;
+    closeMForce();
+    refreshCartUI();
+    toast('เลือกสมาชิก: ' + member.name, 'success');
+  }
+}
+
+function clearSelectedMember() {
+  POS.selectedMember = null;
+  POS.useMemberPoints = false;
+  POS.memberPointsDiscount = 0;
+  refreshCartUI();
+  toast('ยกเลิกการเลือกสมาชิก', 'info');
+}
+
+function toggleUseMemberPoints() {
+  if (!POS.selectedMember) return;
+  
+  POS.useMemberPoints = !POS.useMemberPoints;
+  
+  if (POS.useMemberPoints) {
+    var grandTotal = calcGrandTotal();
+    var maxPoints = POS.selectedMember.points || 0;
+    var pointValue = ST.getConfig().pointValue || 1;
+    var maxDiscount = maxPoints * pointValue;
+    POS.memberPointsDiscount = Math.min(maxDiscount, grandTotal);
+  } else {
+    POS.memberPointsDiscount = 0;
+  }
+  
+  refreshCartUI();
+}
+
+/* Update cart total with member points discount */
+function calcGrandTotal() {
+  var cfg = ST.getConfig();
+  var afterDisc = calcCartTotal();
+  var vat = cfg.vatEnabled ? roundTo(afterDisc * cfg.vatRate / 100, 2) : 0;
+  var sc = cfg.serviceChargeEnabled ? roundTo(afterDisc * cfg.serviceChargeRate / 100, 2) : 0;
+  var total = roundTo(afterDisc + vat + sc, 0);
+  
+  /* Apply member points discount */
+  if (POS.useMemberPoints && POS.memberPointsDiscount > 0) {
+    total = Math.max(0, total - POS.memberPointsDiscount);
+  }
+  
+  return total;
+}
+/* ============================================
+   HOLD ORDER FUNCTIONS
+   ============================================ */
+
+/* Save current cart as hold order */
+function saveAsHoldOrder() {
+  if (POS.cart.length === 0) {
+    toast('ไม่มีรายการในตะกร้า', 'warning');
+    return;
+  }
+  
+  var cfg = ST.getConfig();
+  var subtotal = calcCartSubtotal();
+  var grandTotal = calcGrandTotal();
+  
+  var holdOrder = {
+    id: genId('hold'),
+    items: cloneObj(POS.cart),
+    channel: POS.selectedChannel,
+    channelName: POS.selectedChannelName,
+    subtotal: subtotal,
+    discount: POS.discount,
+    discountType: POS.discountType,
+    discountAmt: POS.discountType === 'percent' ? roundTo(subtotal * POS.discount / 100, 2) : POS.discount,
+    vat: 0,
+    serviceCharge: 0,
+    total: grandTotal,
+    memberId: POS.selectedMember ? POS.selectedMember.id : null,
+    memberName: POS.selectedMember ? POS.selectedMember.name : null,
+    note: '',
+    createdAt: Date.now(),
+    date: todayStr(),
+    time: nowTimeStr()
+  };
+  
+  /* Recalculate with VAT/SC for hold order */
+  var cfg = ST.getConfig();
+  var afterDiscount = subtotal - holdOrder.discountAmt;
+  holdOrder.vat = cfg.vatEnabled ? roundTo(afterDiscount * cfg.vatRate / 100, 2) : 0;
+  holdOrder.serviceCharge = cfg.serviceChargeEnabled ? roundTo(afterDiscount * cfg.serviceChargeRate / 100, 2) : 0;
+  holdOrder.total = roundTo(afterDiscount + holdOrder.vat + holdOrder.serviceCharge, 0);
+  
+  ST.addHoldOrder(holdOrder);
+  
+  /* Send to kitchen if KDS enabled */
+  if (typeof FeatureManager !== 'undefined' && FeatureManager.isEnabled('pro_kds')) {
+    if (typeof KitchenDisplay !== 'undefined') {
+      KitchenDisplay.sendHoldOrderToKitchen(holdOrder);
+    }
+  }
+  
+  /* Clear cart */
+  POS.cart = [];
+  POS.discount = 0;
+  POS.discountType = 'baht';
+  POS.selectedMember = null;
+  POS.useMemberPoints = false;
+  POS.memberPointsDiscount = 0;
+  
+  refreshCartUI();
+  refreshHoldOrdersStrip();  
+  
+  toast('💾 เก็บออเดอร์แล้ว (รอชำระเงิน)', 'success');
+  if (typeof playSound === 'function') playSound('success');
+}
+
+/* Render hold orders list in POS */
+function renderHoldOrdersList() {
+  var holdOrders = ST.getHoldOrders();
+  var container = $('holdOrdersList');
+  if (!container) return;
+  
+  if (holdOrders.length === 0) {
+    container.innerHTML = '<div class="hold-empty">📭 ไม่มีออเดอร์ค้าง</div>';
+    return;
+  }
+  
+  var html = '<div class="hold-orders-grid">';
+  for (var i = 0; i < holdOrders.length; i++) {
+    html += renderHoldOrderCard(holdOrders[i]);
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function renderHoldOrderCard(order) {
+  var cfg = ST.getConfig();
+  var isKitchenMode = (typeof FeatureManager !== 'undefined' && FeatureManager.isEnabled('pro_kds'));
+  var isDone = (order.kitchenStatus === 'completed');
+  
+  var statusBadge = '';
+  if (isKitchenMode) {
+    if (order.kitchenStatus === 'completed') {
+      statusBadge = '<span class="badge badge-success">✅ ทำเสร็จแล้ว</span>';
+    } else if (order.kitchenStatus === 'cooking') {
+      statusBadge = '<span class="badge badge-warning">🔪 กำลังทำ</span>';
+    } else {
+      statusBadge = '<span class="badge badge-info">📋 รอทำ</span>';
+    }
+  } else {
+    statusBadge = '<span class="badge badge-warning">💸 รอชำระ</span>';
+  }
+  
+  var itemsPreview = [];
+  var items = order.items || [];
+  for (var i = 0; i < items.length && i < 3; i++) {
+    itemsPreview.push(items[i].name + (items[i].size ? '(' + items[i].size + ')' : '') + ' x' + items[i].qty);
+  }
+  if (items.length > 3) itemsPreview.push('...');
+  
+  var timeAgo = getTimeAgo(order.createdAt);
+  
+  var html = '<div class="hold-card" data-order-id="' + order.id + '">';
+  html += '<div class="hold-card-header">';
+  html += '<div class="hold-number">' + cfg.orderPrefix + formatOrderNumber(order) + '</div>';
+  html += '<div class="hold-time">' + timeAgo + '</div>';
+  html += statusBadge;
+  html += '</div>';
+  
+  if (order.memberName) {
+    html += '<div class="hold-member">👤 ' + sanitize(order.memberName) + '</div>';
+  }
+  
+  html += '<div class="hold-items">' + sanitize(itemsPreview.join(', ')) + '</div>';
+  html += '<div class="hold-total">' + formatMoneySign(order.total) + '</div>';
+  
+  html += '<div class="hold-actions">';
+  if (isKitchenMode && order.kitchenStatus === 'completed') {
+    html += '<button class="btn btn-success btn-sm" onclick="payHoldOrder(\'' + order.id + '\')">💰 ชำระเงิน</button>';
+  } else if (!isKitchenMode) {
+    html += '<button class="btn btn-success btn-sm" onclick="payHoldOrder(\'' + order.id + '\')">💰 ชำระเงิน</button>';
+    html += '<button class="btn btn-secondary btn-sm" onclick="editHoldOrder(\'' + order.id + '\')">✏️ แก้ไข</button>';
+  }
+  html += '<button class="btn btn-danger btn-sm" onclick="cancelHoldOrder(\'' + order.id + '\')">🗑 ลบ</button>';
+  html += '</div>';
+  
+  html += '</div>';
+  return html;
+}
+
+function formatOrderNumber(order) {
+  /* Generate readable number from timestamp */
+  if (order.number) return order.number;
+  var d = new Date(order.createdAt);
+  return padZ(d.getHours()) + padZ(d.getMinutes()) + padZ(d.getSeconds());
+}
+
+/* Pay hold order */
+function payHoldOrder(holdId) {
+  var holdOrder = ST.getHoldOrderById(holdId);
+  if (!holdOrder) {
+    toast('ไม่พบออเดอร์', 'error');
+    return;
+  }
+  
+  /* Restore cart from hold order */
+  POS.cart = cloneObj(holdOrder.items);
+  POS.discount = holdOrder.discount;
+  POS.discountType = holdOrder.discountType || 'baht';
+  POS.selectedChannel = holdOrder.channel;
+  POS.selectedChannelName = holdOrder.channelName;
+  
+  if (holdOrder.memberId) {
+    POS.selectedMember = ST.getMemberById(holdOrder.memberId);
+  }
+  
+  refreshCartUI();
+  
+  /* Open payment modal */
+  var subtotal = calcCartSubtotal();
+  modalPayment(POS.cart, subtotal, POS.discount, POS.discountType);
+  
+  /* Store holdId to remove after payment */
+  window._currentPayHoldId = holdId;
+}
+
+/* Edit hold order (load to cart) */
+function editHoldOrder(holdId) {
+  var holdOrder = ST.getHoldOrderById(holdId);
+  if (!holdOrder) return;
+  
+  /* Restore cart */
+  POS.cart = cloneObj(holdOrder.items);
+  POS.discount = holdOrder.discount;
+  POS.discountType = holdOrder.discountType || 'baht';
+  POS.selectedChannel = holdOrder.channel;
+  POS.selectedChannelName = holdOrder.channelName;
+  POS.editingHoldOrderId = holdId;
+  
+  if (holdOrder.memberId) {
+    POS.selectedMember = ST.getMemberById(holdOrder.memberId);
+  }
+  
+  refreshCartUI();
+  toast('กำลังแก้ไขออเดอร์ ' + formatOrderNumber(holdOrder), 'info');
+  
+  /* Scroll to cart */
+  var cartEl = $('posCart');
+  if (cartEl) cartEl.scrollIntoView({ behavior: 'smooth' });
+  
+  /* Optionally remove hold order while editing? No, keep until paid */
+}
+
+/* Cancel hold order */
+function cancelHoldOrder(holdId) {
+  confirmDialog('ยกเลิกออเดอร์ค้างนี้?', function() {
+    ST.removeHoldOrder(holdId);
+    refreshHoldOrdersStrip();  
+    toast('ลบออเดอร์ค้างแล้ว', 'warning');
+  });
+}
+
+/* Update hold order after payment */
+function completeHoldOrderPayment(orderData) {
+  var holdId = window._currentPayHoldId;
+  if (!holdId) return;
+  
+  var holdOrder = ST.getHoldOrderById(holdId);
+  if (!holdOrder) return;
+  
+  /* Create real order */
+  var realOrder = {
+    items: holdOrder.items,
+    channel: holdOrder.channel,
+    channelName: holdOrder.channelName,
+    subtotal: orderData.subtotal,
+    discount: orderData.discount,
+    discountType: holdOrder.discountType,
+    vat: orderData.vat,
+    serviceCharge: orderData.serviceCharge,
+    total: orderData.total,
+    payment: orderData.payment,
+    received: orderData.received,
+    change: orderData.change,
+    staffId: APP.currentStaff ? APP.currentStaff.id : '',
+    staffName: APP.currentStaff ? APP.currentStaff.name : '',
+    memberId: holdOrder.memberId,
+    memberName: holdOrder.memberName,
+    note: holdOrder.note
+  };
+  
+  var saved = ST.addOrder(realOrder);
+  
+  /* Add points to member */
+  if (holdOrder.memberId && FeatureManager.isEnabled('pro_members')) {
+    var cfg = ST.getConfig();
+    var pointRate = cfg.pointRate || 100;
+    var earnedPoints = Math.floor(orderData.total / pointRate);
+    if (earnedPoints > 0) {
+      ST.addMemberPoints(holdOrder.memberId, earnedPoints, 'ซื้อสินค้า', saved.id);
+    }
+  }
+  
+  /* Auto deduct stock */
+  if (FeatureManager.isEnabled('pro_autostock')) {
+    ST.autoDeductStock(holdOrder.items);
+  }
+  
+  /* ===== IMPORTANT: Remove hold order ===== */
+  ST.removeHoldOrder(holdId);
+  
+  /* Clear cart */
+  POS.cart = [];
+  POS.discount = 0;
+  POS.discountType = 'baht';
+  POS.selectedMember = null;
+  POS.editingHoldOrderId = null;
+  
+  refreshCartUI();
+  
+  /* ===== REFRESH hold orders strip ===== */
+  refreshHoldOrdersStrip();
+  
+  window._currentPayHoldId = null;
+  
+  toast('✅ ชำระเงินสำเร็จ ออเดอร์ #' + (saved.number || '') + '', 'success');
+  
+  /* Show receipt */
+  setTimeout(function() {
+    modalReceipt(saved);
+  }, 500);
+}
+
+/* ============================================
+   RENDER HOLD ORDERS STRIP (card แนวนอน)
+   ============================================ */
+function renderHoldOrdersStrip() {
+  var holdOrders = ST.getHoldOrders();
+  var isHidden = localStorage.getItem('holdStripHidden') === 'true';
+  var cfg = ST.getConfig();
+  var isKitchenMode = (typeof FeatureManager !== 'undefined' && FeatureManager.isEnabled('pro_kds'));
+  
+  var html = '<div class="hold-orders-strip" id="holdOrdersStrip">';
+  html += '<div class="hold-strip-header">';
+  html += '<div class="flex gap-8" style="align-items:center;">';
+  html += '<span class="fw-600 fs-sm">📋 ออเดอร์ค้าง</span>';
+  html += '<span id="holdStripCount" class="badge badge-warning">' + holdOrders.length + '</span>';
+  html += '</div>';
+  html += '<button class="toggle-strip-btn" onclick="toggleHoldOrdersStrip()" style="width:28px;height:28px;">';
+  html += '<span id="holdToggleIcon">' + (isHidden ? '▸' : '▾') + '</span>';
+  html += '</button>';
+  html += '</div>';
+  
+  html += '<div class="hold-strip-scroll" id="holdStripScroll" style="' + (isHidden ? 'display:none;' : '') + '">';
+  
+  if (holdOrders.length === 0) {
+    html += '<div class="hold-empty-strip">📭 ไม่มีออเดอร์ค้าง</div>';
+  } else {
+    for (var i = 0; i < holdOrders.length; i++) {
+      html += renderHoldOrderStripCard(holdOrders[i], cfg, isKitchenMode);
+    }
+  }
+  
+  html += '</div>';
+  html += '</div>';
+  
+  return html;
+}
+
+function renderHoldOrderStripCard(order, cfg, isKitchenMode) {
+  var statusBadge = '';
+  if (isKitchenMode && order.kitchenStatus === 'completed') {
+    statusBadge = '<span class="badge badge-success" style="font-size:9px;">✅ เสร็จ</span>';
+  } else if (isKitchenMode && order.kitchenStatus === 'cooking') {
+    statusBadge = '<span class="badge badge-warning" style="font-size:9px;">🔪 ทำ</span>';
+  } else {
+    statusBadge = '<span class="badge badge-warning" style="font-size:9px;">💸 รอชำระ</span>';
+  }
+  
+  var itemsPreview = [];
+  var items = order.items || [];
+  for (var i = 0; i < items.length && i < 2; i++) {
+    itemsPreview.push(items[i].name + (items[i].size ? '(' + items[i].size + ')' : '') + ' x' + items[i].qty);
+  }
+  if (items.length > 2) itemsPreview.push('...');
+  
+  var timeAgo = getTimeAgo(order.createdAt);
+  
+  var html = '<div class="hold-strip-card" data-order-id="' + order.id + '">';
+  html += '<div class="hold-strip-number">' + cfg.orderPrefix + formatOrderNumber(order) + '</div>';
+  html += '<div class="hold-strip-time">' + timeAgo + '</div>';
+  html += '<div class="hold-strip-items">' + sanitize(itemsPreview.join(', ')) + '</div>';
+  html += '<div class="hold-strip-total">' + formatMoneySign(order.total) + '</div>';
+  html += '<div class="hold-strip-status">' + statusBadge + '</div>';
+  
+  /* Action Buttons */
+  html += '<div class="hold-strip-actions">';
+  html += '<button class="btn-sm btn-success" onclick="event.stopPropagation(); payHoldOrder(\'' + order.id + '\')" style="padding:2px 6px;font-size:9px;">💰 จ่าย</button>';
+  html += '<button class="btn-sm btn-secondary" onclick="event.stopPropagation(); editHoldOrder(\'' + order.id + '\')" style="padding:2px 6px;font-size:9px;">✏️ แก้ไข</button>';
+  html += '</div>';
+  
+  html += '</div>';
+  return html;
+}
+/* Toggle show/hide hold orders strip */
+function toggleHoldOrdersStrip() {
+  var scroll = $('holdStripScroll');
+  var icon = $('holdToggleIcon');
+  if (!scroll) return;
+
+  if (scroll.style.display === 'none') {
+    scroll.style.display = '';
+    if (icon) icon.textContent = '▾';
+    localStorage.setItem('holdStripHidden', 'false');
+  } else {
+    scroll.style.display = 'none';
+    if (icon) icon.textContent = '▸';
+    localStorage.setItem('holdStripHidden', 'true');
+  }
+  vibrate(20);
+}
+
+/* Refresh hold orders strip without reloading whole page */
+function refreshHoldOrdersStrip() {
+  var stripContainer = $('holdOrdersStrip');
+  if (stripContainer) {
+    var newStrip = renderHoldOrdersStrip();
+    stripContainer.outerHTML = newStrip;
+  } else {
+    /* ถ้าไม่มี strip ให้สร้างใหม่ */
+    var posMenu = $('pos-menu');
+    var catTabs = $('catTabs');
+    if (posMenu && catTabs) {
+      var newStripHtml = renderHoldOrdersStrip();
+      if (newStripHtml) {
+        var tempDiv = document.createElement('div');
+        tempDiv.innerHTML = newStripHtml;
+        posMenu.insertBefore(tempDiv.firstChild, catTabs);
+      }
+    }
+  }
+  
+  /* Update count badge in admin if exists */
+  var count = ST.getHoldOrders().length;
+  var countEl = $('holdOrdersCount');
+  if (countEl) countEl.textContent = count;
+}
+/* Scroll recent orders */
+function scrollRecentOrders(direction) {
+  var container = $('recentScroll');
+  if (!container) return;
+  var scrollAmount = 220; // ความกว้างของการ์ด + gap
+  container.scrollLeft += direction * scrollAmount;
+  vibrate(10);
+}
+
+/* Scroll hold orders */
+function scrollHoldOrders(direction) {
+  var container = $('holdStripScroll');
+  if (!container) return;
+  var scrollAmount = 180; // ความกว้างของการ์ด + gap
+  container.scrollLeft += direction * scrollAmount;
+  vibrate(10);
+}
 
 console.log('[views-pos.js] loaded');

@@ -495,23 +495,37 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
   html += '<div class="cart-row total"><span>💰 ยอดชำระ</span><span>' + formatMoneySign(grandTotal) + '</span></div>';
   html += '</div>';
 
-  /* Payment method */
-  html += '<div class="form-group">';
-  html += '<label class="form-label">วิธีชำระเงิน</label>';
-  html += '<div class="payment-methods" id="payMethods">';
-  html += '<div class="pay-method active" data-method="cash" onclick="selectPayMethod(this)">';
-  html += '<div class="pay-method-icon">💵</div><div>เงินสด</div></div>';
-  html += '<div class="pay-method" data-method="transfer" onclick="selectPayMethod(this)">';
-  html += '<div class="pay-method-icon">📱</div><div>โอน</div></div>';
-
-  /* QR PromptPay tab — show only if configured */
-  if (cfg.promptPayEnabled && cfg.promptPayId) {
-    html += '<div class="pay-method" data-method="promptpay" onclick="selectPayMethod(this)">';
-    html += '<div class="pay-method-icon">📷</div><div>QR</div></div>';
+  /* ===== NEW: Sales Channel ===== */
+  var channels = ST.getActiveChannels();
+  if (channels.length > 0) {
+    html += '<div class="form-group mb-16">';
+    html += '<label class="form-label">🛵 ช่องทาง</label>';
+    html += '<div class="option-selector-sm" id="modalChannelSelector">';
+    for (var ch = 0; ch < channels.length; ch++) {
+      var c = channels[ch];
+      var chActive = (c.id === (POS.selectedChannel || 'ch_walkin')) ? ' active' : '';
+      html += '<div class="opt-btn-sm' + chActive + '" data-id="' + sanitize(c.id) + '" data-name="' + sanitize(c.name) + '" onclick="selectModalChannel(this)">';
+      html += '<span>' + (c.emoji || '🏪') + '</span>';
+      html += '<span>' + sanitize(c.name) + '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
   }
 
-  html += '</div>';
-  html += '</div>';
+ /* Payment method */
+html += '<div class="form-group">';
+html += '<label class="form-label">💵 วิธีชำระเงิน</label>';
+html += '<div class="payment-methods" id="payMethods">';
+html += '<div class="pay-method active" data-method="cash" onclick="selectPayMethod(this)">';
+html += '<div class="pay-method-icon">💵</div><div>เงินสด</div></div>';
+html += '<div class="pay-method" data-method="transfer" onclick="selectPayMethod(this)">';
+html += '<div class="pay-method-icon">📱</div><div>โอน</div></div>';
+html += '<div class="pay-method" data-method="promptpay" onclick="selectPayMethod(this)">';
+html += '<div class="pay-method-icon">📷</div><div>QR</div></div>';
+html += '</div>';
+html += '</div>';
+
 
   /* Cash section */
   html += '<div id="cashSection">';
@@ -535,19 +549,34 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
   html += '</div>';
   html += '</div>';
 
-  /* [Standard Version] PromptPay QR section (hidden by default) */
-  if (cfg.promptPayEnabled && cfg.promptPayId) {
+  /* QR section (PromtPay) */
+  var defPP = ST.getDefaultPromptPay();
+  var ppEnabled = cfg.promptPayEnabled && defPP;
+
+  if (ppEnabled) {
+    var ppAccounts = ST.getPromptPayAccounts();
+
     html += '<div id="promptPaySection" style="display:none;">';
     html += '<div class="text-center p-16">';
     html += '<div class="fw-700 mb-8">📱 สแกนจ่ายเงิน</div>';
-    if (cfg.promptPayName) {
-      html += '<div class="text-muted fs-sm mb-8">' + sanitize(cfg.promptPayName) + '</div>';
+
+    if (ppAccounts.length > 1) {
+      html += '<div class="option-selector-sm mb-8" id="ppAccountSelector">';
+      for (var ppi = 0; ppi < ppAccounts.length; ppi++) {
+        var ppAcc = ppAccounts[ppi];
+        var ppActive = ppAcc.isDefault ? ' active' : '';
+        html += '<div class="opt-btn-sm' + ppActive + '" data-ppid="' + sanitize(ppAcc.ppId) + '" data-ppname="' + sanitize(ppAcc.name) + '" onclick="switchPPAccount(this,' + grandTotal + ')">';
+        html += '<span>' + sanitize(ppAcc.name) + '</span>';
+        html += '</div>';
+      }
+      html += '</div>';
     }
-    html += '<div class="qr-frame">';
-    html += '<img id="promptPayQR" src="' + getPromptPayQRUrl(cfg.promptPayId, grandTotal, 220) + '" alt="PromptPay QR" style="width:220px;height:220px;border-radius:8px;">';
+
+    html += '<div class="qr-frame" id="ppQRFrame">';
+    html += '<img id="promptPayQR" src="' + getPromptPayQRUrl(defPP.ppId, grandTotal, 220) + '" style="width:220px;height:220px;border-radius:8px;">';
     html += '</div>';
     html += '<div class="fw-800 text-accent mt-8" style="font-size:24px;">' + formatMoneySign(grandTotal) + '</div>';
-    html += '<div class="text-muted fs-sm mt-4">PromptPay: ' + sanitize(formatPromptPayId(cfg.promptPayId)) + '</div>';
+    html += '<div id="ppNameDisplay" class="text-muted fs-sm mt-4">' + sanitize(defPP.name) + ' — ' + formatPromptPayId(defPP.ppId) + '</div>';
     html += '</div>';
     html += '</div>';
   }
@@ -574,7 +603,6 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
 
   openModal('💳 ชำระเงิน', html, footer);
 
-  /* Auto calc change after modal opens */
   setTimeout(function() {
     calcChange();
   }, 200);
@@ -605,6 +633,22 @@ function selectPayMethod(el) {
   if (tfSection) tfSection.style.display = method === 'transfer' ? '' : 'none';
 }
 
+function selectModalChannel(el) {
+  var parent = el.parentNode;
+  var siblings = parent.querySelectorAll('.opt-btn-sm');
+  for (var i = 0; i < siblings.length; i++) removeClass(siblings[i], 'active');
+  addClass(el, 'active');
+  
+  /* Store selected channel for order */
+  var channelId = el.getAttribute('data-id');
+  var channelName = el.getAttribute('data-name');
+  if (typeof POS !== 'undefined') {
+    POS.selectedChannel = channelId;
+    POS.selectedChannelName = channelName;
+  }
+  vibrate(20);
+}
+
 function setPayReceived(amount) {
   var el = $('payReceived');
   if (el) {
@@ -624,6 +668,27 @@ function calcChange() {
   if (el) {
     el.textContent = formatMoneySign(change);
   }
+}
+
+function switchPPAccount(el, amount) {
+  var parent = el.parentNode;
+  var siblings = parent.querySelectorAll('.opt-btn-sm');
+  for (var i = 0; i < siblings.length; i++) removeClass(siblings[i], 'active');
+  addClass(el, 'active');
+
+  var ppId = el.getAttribute('data-ppid');
+  var ppName = el.getAttribute('data-ppname');
+
+  var qrImg = $('promptPayQR');
+  if (qrImg && typeof getPromptPayQRUrl === 'function') {
+    qrImg.src = getPromptPayQRUrl(ppId, amount, 220);
+  }
+
+  var nameDisplay = $('ppNameDisplay');
+  if (nameDisplay && typeof formatPromptPayId === 'function') {
+    nameDisplay.textContent = ppName + ' — ' + formatPromptPayId(ppId);
+  }
+  vibrate(20);
 }
 
 function confirmPayment() {
@@ -680,6 +745,13 @@ function modalReceipt(order) {
   html += '<span>ออเดอร์: ' + cfg.orderPrefix + padZ(order.number) + '</span>';
   html += '<span>' + sanitize(order.date) + '</span>';
   html += '</div>';
+  /* Channel */
+  if (order.channelName) {
+    html += '<div class="flex-between fs-sm" style="margin-bottom:4px;">';
+    html += '<span>ช่องทาง:</span>';
+    html += '<span>' + sanitize(order.channelName) + '</span>';
+    html += '</div>';
+  }
   html += '<div class="flex-between fs-sm" style="margin-bottom:8px;">';
   html += '<span>เวลา: ' + sanitize(order.time) + '</span>';
   if (order.staffName) {
@@ -761,6 +833,9 @@ function doPrintReceipt() {
   ph += '</div>';
   ph += '<div class="receipt-divider"></div>';
   ph += '<div class="receipt-row"><span>' + cfg.orderPrefix + padZ(order.number) + '</span><span>' + sanitize(order.date) + ' ' + sanitize(order.time) + '</span></div>';
+if (order.channelName && order.channelName !== 'Walk-in') {
+  ph += '<div class="receipt-row"><span>ช่องทาง</span><span>' + sanitize(order.channelName) + '</span></div>';
+  }
   ph += '<div class="receipt-divider"></div>';
 
   var items = order.items || [];
@@ -1221,6 +1296,9 @@ function modalOrderDetail(order) {
   html += '<div>';
   html += '<div class="fw-800 fs-lg text-accent">' + cfg.orderPrefix + padZ(order.number) + '</div>';
   html += '<div class="text-muted fs-sm">' + sanitize(order.date) + ' ' + sanitize(order.time) + '</div>';
+if (order.channelName) {
+  html += '<div class="fs-sm"><span class="badge badge-info">' + sanitize(order.channelName) + '</span></div>';
+  }
   html += '</div>';
   html += statusBadge;
   html += '</div>';

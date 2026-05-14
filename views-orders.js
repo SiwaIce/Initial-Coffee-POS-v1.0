@@ -497,6 +497,9 @@ function renderOrderCard(order, cfg) {
   html += '<div class="order-bottom">';
   html += '<div class="flex gap-8" style="align-items:center;">';
   html += '<span>' + payIcon + '</span>';
+  if (order.channelName && order.channelName !== 'Walk-in') {
+    html += '<span class="badge badge-info" style="font-size:10px;">' + sanitize(order.channelName) + '</span>';
+  }
   if (order.staffName) {
     html += '<span class="text-muted fs-sm">👤 ' + sanitize(order.staffName) + '</span>';
   }

@@ -266,10 +266,58 @@ function checkLowStock() {
 }
 
 /* ============================================
+   [Standard Version] FEATURE TOGGLE
+   ============================================ */
+function applyFeatureToggle() {
+  /* Safety check */
+  if (typeof FeatureManager === 'undefined' || !FeatureManager.isEnabled) {
+    console.log('[FeatureToggle] FeatureManager not ready yet');
+    return;
+  }
+  
+  var cfg = ST.getConfig();
+
+  /* Sidebar */
+  var sideItems = qsa('.nav-item');
+  for (var i = 0; i < sideItems.length; i++) {
+    var view = sideItems[i].getAttribute('data-view');
+    if (view === 'stock') {
+      var showStock = FeatureManager.isEnabled('std_stock');
+      sideItems[i].style.display = showStock !== false ? '' : 'none';
+    }
+  }
+
+  /* Bottom Nav */
+  var bnavItems = qsa('.bnav-item');
+  for (var j = 0; j < bnavItems.length; j++) {
+    var bview = bnavItems[j].getAttribute('data-view');
+    if (bview === 'stock') {
+      var showStock2 = FeatureManager.isEnabled('std_stock');
+      bnavItems[j].style.display = showStock2 !== false ? '' : 'none';
+    }
+  }
+}
+
+/* ============================================
    INIT
    ============================================ */
 function initApp() {
   console.log('[app.js] initializing...');
+  checkMobile();
+  applyTheme();
+  applyShopName();
+  
+  /* Apply feature toggles */
+  if (typeof FeatureManager !== 'undefined' && FeatureManager.applyToUI) {
+    FeatureManager.applyToUI();  // เรียกตรงนี้
+  } else {
+    applyFeatureToggle(); // fallback
+  }
+
+  startClock();
+  registerSW();
+  initShortcuts();
+  window.addEventListener('resize', debouncedResize);
 
   /* 1. Check mobile */
   checkMobile();
@@ -280,19 +328,22 @@ function initApp() {
   /* 3. Apply shop name */
   applyShopName();
 
-  /* 4. Start clock */
+  /* 4. Apply feature toggle */
+  applyFeatureToggle();
+
+  /* 5. Start clock */
   startClock();
 
-  /* 5. Register Service Worker */
+  /* 6. Register Service Worker */
   registerSW();
 
-  /* 6. Init keyboard shortcuts */
+  /* 7. Init keyboard shortcuts */
   initShortcuts();
 
-  /* 7. Window resize */
+  /* 8. Window resize */
   window.addEventListener('resize', debouncedResize);
 
-  /* 8. Hide splash, show app */
+  /* 9. Hide splash, show app */
   setTimeout(function() {
     var splash = $('splash');
     var app = $('app');

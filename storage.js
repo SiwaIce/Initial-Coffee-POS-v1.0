@@ -23,7 +23,13 @@ ST._keys = [
   'staff',
   'shifts',
   'favorites',
-  'channels'
+  'channels',
+  'promptpayAccounts',
+  'feature_overrides',
+  'license',
+  'super_admin',
+  'recipes',
+  'memberTransactions'
 ];
 
 /* === LOW-LEVEL === */
@@ -79,6 +85,7 @@ ST._onSet = null;
    ============================================ */
 ST.getConfig = function() {
   var defaults = {
+    lineNotifyToken: '',
     shopName: 'Coffee POS',
     currency: '฿',
     vatEnabled: false,
@@ -91,6 +98,8 @@ ST.getConfig = function() {
     orderPrefix: '#',
     lastOrderDate: '',
     lastOrderNumber: 0,
+    showStock: true,
+    showStaff: true,
     quickCashAmounts: [20, 50, 100, 500, 1000],
     soundEnabled: true,
     promptPayId: '',
@@ -886,6 +895,391 @@ ST.getActiveChannels = function() {
     if (channels[i].active !== false) result.push(channels[i]);
   }
   return result;
+};
+
+/* ============================================
+   [Pro] PROMPTPAY MULTIPLE ACCOUNTS
+   ============================================ */
+ST.getPromptPayAccounts = function() {
+  return ST.getObj('promptpayAccounts', []);
+};
+
+ST.savePromptPayAccounts = function(list) {
+  ST.setObj('promptpayAccounts', list);
+};
+
+ST.addPromptPayAccount = function(acc) {
+  var list = ST.getPromptPayAccounts();
+  acc.id = acc.id || genId('pp');
+  acc.isDefault = list.length === 0 ? true : !!acc.isDefault;
+  list.push(acc);
+  ST.savePromptPayAccounts(list);
+  return acc;
+};
+
+ST.updatePromptPayAccount = function(id, data) {
+  var list = ST.getPromptPayAccounts();
+  var idx = findIndexById(list, id);
+  if (idx === -1) return null;
+  for (var k in data) list[idx][k] = data[k];
+  ST.savePromptPayAccounts(list);
+  return list[idx];
+};
+
+ST.deletePromptPayAccount = function(id) {
+  var list = ST.getPromptPayAccounts();
+  removeById(list, id);
+  /* If deleted was default, set first as default */
+  if (list.length > 0) {
+    var hasDefault = false;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].isDefault) { hasDefault = true; break; }
+    }
+    if (!hasDefault) list[0].isDefault = true;
+  }
+  ST.savePromptPayAccounts(list);
+};
+
+ST.setDefaultPromptPay = function(id) {
+  var list = ST.getPromptPayAccounts();
+  for (var i = 0; i < list.length; i++) {
+    list[i].isDefault = list[i].id === id;
+  }
+  ST.savePromptPayAccounts(list);
+};
+
+ST.getDefaultPromptPay = function() {
+  var list = ST.getPromptPayAccounts();
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].isDefault) return list[i];
+  }
+  return list.length > 0 ? list[0] : null;
+};
+
+/* Migrate old single config to multi */
+ST.migratePromptPay = function() {
+  var cfg = ST.getConfig();
+  var list = ST.getPromptPayAccounts();
+  if (list.length === 0 && cfg.promptPayId) {
+    ST.addPromptPayAccount({
+      name: cfg.promptPayName || 'บัญชีหลัก',
+      ppId: cfg.promptPayId,
+      isDefault: true
+    });
+  }
+};
+
+/* ============================================
+   [Pro] RECIPE MANAGEMENT
+   ============================================ */
+
+/* Get all recipes */
+ST.getRecipes = function() {
+  return ST.getObj('recipes', []);
+};
+
+/* Save all recipes */
+ST.saveRecipes = function(recipes) {
+  ST.setObj('recipes', recipes);
+};
+
+/* Get recipe by menuId and size */
+ST.getRecipe = function(menuId, size) {
+  var recipes = ST.getRecipes();
+  for (var i = 0; i < recipes.length; i++) {
+    if (recipes[i].menuId === menuId && recipes[i].size === size) {
+      return recipes[i];
+    }
+  }
+  return null;
+};
+
+/* Add or update recipe */
+ST.setRecipe = function(recipe) {
+  var recipes = ST.getRecipes();
+  var existingIdx = -1;
+  for (var i = 0; i < recipes.length; i++) {
+    if (recipes[i].menuId === recipe.menuId && recipes[i].size === recipe.size) {
+      existingIdx = i;
+      break;
+    }
+  }
+  
+  recipe.id = recipe.id || genId('recipe');
+  recipe.updatedAt = Date.now();
+  
+  if (existingIdx !== -1) {
+    recipes[existingIdx] = recipe;
+  } else {
+    recipes.push(recipe);
+  }
+  
+  ST.saveRecipes(recipes);
+  return recipe;
+};
+
+/* Delete recipe */
+ST.deleteRecipe = function(menuId, size) {
+  var recipes = ST.getRecipes();
+  var newRecipes = [];
+  for (var i = 0; i < recipes.length; i++) {
+    if (!(recipes[i].menuId === menuId && recipes[i].size === size)) {
+      newRecipes.push(recipes[i]);
+    }
+  }
+  ST.saveRecipes(newRecipes);
+};
+
+/* Calculate recipe cost based on current stock prices */
+ST.calculateRecipeCost = function(recipe) {
+  if (!recipe || !recipe.ingredients) return 0;
+  
+  var stockItems = ST.getStock();
+  var totalCost = 0;
+  
+  for (var i = 0; i < recipe.ingredients.length; i++) {
+    var ing = recipe.ingredients[i];
+    var stockItem = findById(stockItems, ing.stockId);
+    if (stockItem && stockItem.costPerUnit) {
+      totalCost += (ing.qty * stockItem.costPerUnit);
+    }
+  }
+  
+  return roundTo(totalCost, 2);
+};
+
+/* Auto deduct stock when order is placed */
+ST.autoDeductStock = function(orderItems) {
+  if (!FeatureManager.isEnabled('pro_autostock')) {
+    console.log('[AutoStock] Feature disabled');
+    return false;
+  }
+  
+  var deducted = [];
+  var errors = [];
+  
+  for (var i = 0; i < orderItems.length; i++) {
+    var item = orderItems[i];
+    var recipe = ST.getRecipe(item.menuId, item.size);
+    
+    if (!recipe || !recipe.ingredients) {
+      console.log('[AutoStock] No recipe for:', item.name, item.size);
+      continue;
+    }
+    
+    for (var j = 0; j < recipe.ingredients.length; j++) {
+      var ing = recipe.ingredients[j];
+      var requiredQty = ing.qty * (item.qty || 1);
+      
+      try {
+        ST.adjustStock(ing.stockId, -requiredQty, 'ขาย: ' + item.name + ' x' + item.qty);
+        deducted.push({
+          stockId: ing.stockId,
+          stockName: ing.stockName || ing.stockId,
+          qty: requiredQty,
+          menuItem: item.name
+        });
+      } catch(e) {
+        errors.push({
+          stockName: ing.stockName || ing.stockId,
+          required: requiredQty,
+          error: e.message
+        });
+      }
+    }
+  }
+  
+  if (errors.length > 0) {
+    console.warn('[AutoStock] Some deductions failed:', errors);
+    toast('⚠️ ตัดสต็อกบางรายการไม่สำเร็จ', 'warning');
+  }
+  
+  return deducted;
+};
+
+/* ============================================
+   [Pro] MEMBER MANAGEMENT
+   ============================================ */
+
+/* Get all members */
+ST.getMembers = function() {
+  return ST.getObj('members', []);
+};
+
+/* Save all members */
+ST.saveMembers = function(members) {
+  ST.setObj('members', members);
+};
+
+/* Get member by ID */
+ST.getMemberById = function(id) {
+  var members = ST.getMembers();
+  return findById(members, id);
+};
+
+/* Get member by phone */
+ST.getMemberByPhone = function(phone) {
+  var members = ST.getMembers();
+  var cleanPhone = phone.replace(/[^0-9]/g, '');
+  for (var i = 0; i < members.length; i++) {
+    var memberPhone = (members[i].phone || '').replace(/[^0-9]/g, '');
+    if (memberPhone === cleanPhone) return members[i];
+  }
+  return null;
+};
+
+/* Add new member */
+ST.addMember = function(member) {
+  var members = ST.getMembers();
+  member.id = member.id || genId('mem');
+  member.points = member.points || 0;
+  member.totalSpent = member.totalSpent || 0;
+  member.createdAt = member.createdAt || todayStr();
+  member.lastVisit = member.lastVisit || todayStr();
+  members.push(member);
+  ST.saveMembers(members);
+  return member;
+};
+
+/* Update member */
+ST.updateMember = function(id, data) {
+  var members = ST.getMembers();
+  var idx = findIndexById(members, id);
+  if (idx === -1) return null;
+  for (var k in data) {
+    members[idx][k] = data[k];
+  }
+  ST.saveMembers(members);
+  return members[idx];
+};
+
+/* Delete member */
+ST.deleteMember = function(id) {
+  var members = ST.getMembers();
+  removeById(members, id);
+  ST.saveMembers(members);
+};
+
+/* Add points to member */
+ST.addMemberPoints = function(memberId, points, reason, orderId) {
+  var member = ST.getMemberById(memberId);
+  if (!member) return false;
+  
+  member.points = (member.points || 0) + points;
+  member.totalSpent = (member.totalSpent || 0) + (reason === 'ซื้อสินค้า' ? (points * (ST.getConfig().pointRate || 100)) : 0);
+  member.lastVisit = todayStr();
+  ST.updateMember(memberId, member);
+  
+  /* Log transaction */
+  ST.addMemberTransaction({
+    memberId: memberId,
+    points: points,
+    type: points > 0 ? 'earn' : 'use',
+    reason: reason || (points > 0 ? 'รับแต้ม' : 'ใช้แต้ม'),
+    orderId: orderId,
+    date: todayStr(),
+    time: nowTimeStr(),
+    timestamp: nowTimestamp()
+  });
+  
+  return true;
+};
+
+/* Use member points for discount */
+ST.useMemberPoints = function(memberId, points, reason, discountAmount) {
+  var member = ST.getMemberById(memberId);
+  if (!member || (member.points || 0) < points) return false;
+  
+  member.points = (member.points || 0) - points;
+  ST.updateMember(memberId, member);
+  
+  ST.addMemberTransaction({
+    memberId: memberId,
+    points: -points,
+    type: 'use',
+    reason: reason || 'ใช้แต้มลดราคา',
+    discountAmount: discountAmount,
+    date: todayStr(),
+    time: nowTimeStr(),
+    timestamp: nowTimestamp()
+  });
+  
+  return true;
+};
+
+/* Calculate points from purchase amount */
+ST.calculatePoints = function(amount) {
+  var cfg = ST.getConfig();
+  var pointRate = cfg.pointRate || 100;
+  return Math.floor(amount / pointRate);
+};
+
+/* Member Transactions */
+ST.getMemberTransactions = function() {
+  return ST.getObj('memberTransactions', []);
+};
+
+ST.saveMemberTransactions = function(transactions) {
+  ST.setObj('memberTransactions', transactions);
+};
+
+ST.addMemberTransaction = function(transaction) {
+  var transactions = ST.getMemberTransactions();
+  transaction.id = transaction.id || genId('mt');
+  transactions.push(transaction);
+  
+  /* Keep last 5000 */
+  if (transactions.length > 5000) {
+    transactions = transactions.slice(-5000);
+  }
+  ST.saveMemberTransactions(transactions);
+  return transaction;
+};
+
+/* ============================================
+   [Pro] HOLD ORDER FUNCTIONS
+   ============================================ */
+
+/* Get hold orders (ยังไม่จ่าย) */
+ST.getHoldOrders = function() {
+  return ST.getObj('hold_orders', []);
+};
+
+/* Save hold orders */
+ST.saveHoldOrders = function(orders) {
+  ST.setObj('hold_orders', orders);
+};
+
+/* Add hold order */
+ST.addHoldOrder = function(order) {
+  var holdOrders = ST.getHoldOrders();
+  order.id = order.id || genId('hold');
+  order.status = 'hold';
+  order.createdAt = Date.now();
+  holdOrders.unshift(order); // ใหม่สุดอยู่ข้างบน
+  ST.saveHoldOrders(holdOrders);
+  return order;
+};
+
+/* Remove hold order (เมื่อชำระเงินแล้ว) */
+ST.removeHoldOrder = function(orderId) {
+  var holdOrders = ST.getHoldOrders();
+  var newHoldOrders = [];
+  for (var i = 0; i < holdOrders.length; i++) {
+    if (holdOrders[i].id !== orderId) {
+      newHoldOrders.push(holdOrders[i]);
+    }
+  }
+  ST.saveHoldOrders(newHoldOrders);
+};
+
+/* Get hold order by id */
+ST.getHoldOrderById = function(orderId) {
+  var holdOrders = ST.getHoldOrders();
+  for (var i = 0; i < holdOrders.length; i++) {
+    if (holdOrders[i].id === orderId) return holdOrders[i];
+  }
+  return null;
 };
 
 console.log('[storage.js] loaded');

@@ -1,7 +1,7 @@
 /* ============================================
    COFFEE POS — ADMIN.JS
    ตั้งค่าร้าน / พนักงาน / Data / About
-   [Standard Version]
+   [Standard Version 1.2]
    ============================================ */
 
 /* === ADMIN VIEW STATE === */
@@ -26,7 +26,10 @@ function renderAdminView() {
   html += '<div class="cat-tabs mb-16">';
   html += admSubTab('shop', '🏪 ร้านค้า');
   html += admSubTab('staff', '👥 พนักงาน');
+  html += admSubTab('members', '👤 สมาชิก');
+  html += admSubTab('recipe', '🧪 สูตรวัตถุดิบ');  // NEW - Pro feature
   html += admSubTab('data', '💾 ข้อมูล');
+  html += admSubTab('license', '🔑 License');
   html += admSubTab('about', 'ℹ️ เกี่ยวกับ');
   html += '</div>';
 
@@ -53,10 +56,121 @@ function renderAdmContent() {
   switch (ADMVIEW.tab) {
     case 'shop': return renderShopSettings();
     case 'staff': return renderStaffSettings();
+    case 'members':
+  setTimeout(function() {
+    if (typeof renderMembersView === 'function') {
+      renderMembersView();
+    }
+  }, 50);
+  return '<div id="membersViewContainer"></div>';
+
+    case 'recipe': 
+      /* Return container, then load recipe view after DOM ready */
+      setTimeout(function() {
+        if (typeof renderRecipeView === 'function') {
+          var container = document.getElementById('recipeViewContainer');
+          if (container) {
+            renderRecipeView();
+          }
+        }
+      }, 50);
+      return renderRecipeAdminTab();
     case 'data': return renderDataSettings();
+    case 'license': return renderLicenseTab();
     case 'about': return renderAboutPage();
     default: return '';
   }
+}
+// เพิ่มฟังก์ชันใหม่
+function renderLicenseTab() {
+  var licenseTier = LicenseManager ? LicenseManager.getTier() : 'standard';
+  var licenseKey = LicenseManager ? LicenseManager.getCurrentKey() : null;
+  var daysLeft = LicenseManager ? LicenseManager.getTrialDaysLeft() : 0;
+  
+  var html = '';
+  
+  html += '<div class="card mb-16">';
+  html += '<div class="card-header">';
+  html += '<div class="card-title">🔑 สถานะ License</div>';
+  html += '</div>';
+  
+  html += '<div class="text-center p-16">';
+  html += '<div style="font-size:64px;">';
+  if (licenseTier === 'pro') html += '⭐';
+  else if (licenseTier === 'trial') html += '🧪';
+  else html += '📦';
+  html += '</div>';
+  
+  html += '<div class="fw-800 fs-xl mt-4">';
+  if (licenseTier === 'pro') html += 'Pro Edition';
+  else if (licenseTier === 'trial') html += 'Trial Mode';
+  else html += 'Standard Edition (Free)';
+  html += '</div>';
+  
+  if (licenseKey) {
+    html += '<div class="text-muted mt-4">Key: <code>' + sanitize(licenseKey) + '</code></div>';
+  }
+  
+  if (licenseTier === 'trial' && daysLeft > 0) {
+    html += '<div class="mt-4"><span class="badge badge-warning">เหลือ ' + daysLeft + ' วัน</span></div>';
+  }
+  
+  html += '</div>';
+  html += '</div>';
+  
+  /* Feature comparison table */
+  html += '<div class="card mb-16">';
+  html += '<div class="card-header">';
+  html += '<div class="card-title">📋 เปรียบเทียบฟีเจอร์</div>';
+  html += '</div>';
+  
+  html += '<div class="table-wrap">';
+  html += '<table>';
+  html += '<thead>';
+  html += '<tr><th>ฟีเจอร์</th><th class="text-center">Standard</th><th class="text-center">Pro</th></tr>';
+  html += '</thead>';
+  html += '<tbody>';
+  
+  var compareFeatures = [
+    { name: '📦 Stock วัตถุดิบ', std: '✅', pro: '✅' },
+    { name: '👥 ระบบพนักงาน', std: '✅', pro: '✅' },
+    { name: '📷 PromptPay QR', std: '✅', pro: '✅' },
+    { name: '💬 LINE Notify', std: '⚠️', pro: '✅' },
+    { name: '👤 สมาชิก + แต้ม', std: '❌', pro: '✅' },
+    { name: '🧪 Recipe + COGS', std: '❌', pro: '✅' },
+    { name: '⚡ Auto ตัด Stock', std: '❌', pro: '✅' },
+    { name: '🍳 Kitchen Display', std: '❌', pro: '✅' },
+    { name: '🔄 Real-time Dashboard', std: '❌', pro: '✅' },
+    { name: '📈 รายงานขั้นสูง', std: '❌', pro: '✅' }
+  ];
+  
+  for (var i = 0; i < compareFeatures.length; i++) {
+    var f = compareFeatures[i];
+    var stdClass = f.std === '✅' ? 'text-success' : (f.std === '⚠️' ? 'text-warning' : 'text-danger');
+    var proClass = f.pro === '✅' ? 'text-success' : 'text-danger';
+    
+    html += '<tr>';
+    html += '<td class="fw-600">' + f.name + '</td>';
+    html += '<td class="text-center ' + stdClass + '">' + f.std + '</td>';
+    html += '<td class="text-center ' + proClass + '">' + f.pro + '</td>';
+    html += '</tr>';
+  }
+  
+  html += '</tbody>';
+  html += '</table>';
+  html += '</div>';
+  html += '</div>';
+  
+  /* Action buttons */
+  html += '<div class="flex gap-12 flex-wrap">';
+  if (licenseTier !== 'pro') {
+    html += '<button class="btn btn-primary btn-lg" style="flex:1;" onclick="LicenseManager.showLicenseModal()">🔑 เปิดใช้งาน Pro License</button>';
+  } else {
+    html += '<button class="btn btn-secondary" onclick="LicenseManager.showLicenseModal()">🔄 เปลี่ยน License Key</button>';
+  }
+  html += '</div>';
+  
+  return html;
 }
 
 /* ============================================
@@ -87,7 +201,25 @@ function renderShopSettings() {
   html += '</div>';
   html += '</div>';
 
+  /* Feature Toggle */
+  html += '<div style="border-top:1px solid var(--border);margin:14px 0;"></div>';
+  html += '<div class="fw-600 mb-8">📌 แสดงเมนู</div>';
+
+  html += '<div class="form-group">';
+  html += '<label class="toggle-wrap" onclick="toggleToggle(this)">';
+  html += '<div class="toggle' + (cfg.showStock !== false ? ' on' : '') + '" id="cfgShowStock"></div>';
+  html += '<span>📦 Stock วัตถุดิบ</span>';
+  html += '</label>';
   html += '</div>';
+
+  html += '<div class="form-group">';
+  html += '<label class="toggle-wrap" onclick="toggleToggle(this)">';
+  html += '<div class="toggle' + (cfg.showStaff !== false ? ' on' : '') + '" id="cfgShowStaff"></div>';
+  html += '<span>👥 พนักงาน / PIN Login</span>';
+  html += '</label>';
+  html += '</div>';
+
+  html += '</div>'; /* end shop info card */
 
   /* === VAT / SC === */
   html += '<div class="card mb-16">';
@@ -117,9 +249,9 @@ function renderShopSettings() {
   html += '<input type="number" id="cfgSCRate" value="' + (cfg.serviceChargeRate || 10) + '" placeholder="10" style="width:100px;" inputmode="numeric">';
   html += '</div>';
 
-  html += '</div>';
+  html += '</div>'; /* end VAT card */
 
-  /* === [Standard Version] Sound === */
+  /* === Sound === */
   html += '<div class="card mb-16">';
   html += '<div class="card-header"><div class="card-title">🔊 เสียง</div></div>';
 
@@ -131,16 +263,22 @@ function renderShopSettings() {
   html += '</div>';
 
   html += '<div class="flex gap-8">';
-  html += '<button class="btn btn-secondary btn-sm" onclick="playSound(\'add\')">🔔 ทดสอบ กดสั่ง</button>';
-  html += '<button class="btn btn-secondary btn-sm" onclick="playSound(\'success\')">🎵 ทดสอบ สำเร็จ</button>';
-  html += '<button class="btn btn-secondary btn-sm" onclick="playSound(\'error\')">⚠️ ทดสอบ Error</button>';
+  html += '<button class="btn btn-secondary btn-sm" onclick="if(typeof playSound===\'function\')playSound(\'add\')">🔔 ทดสอบ สั่ง</button>';
+  html += '<button class="btn btn-secondary btn-sm" onclick="if(typeof playSound===\'function\')playSound(\'success\')">🎵 ทดสอบ สำเร็จ</button>';
+  html += '<button class="btn btn-secondary btn-sm" onclick="if(typeof playSound===\'function\')playSound(\'error\')">⚠️ ทดสอบ Error</button>';
   html += '</div>';
 
-  html += '</div>';
+  html += '</div>'; /* end Sound card */
 
-  /* === [Standard Version] PromptPay === */
+/* === [Pro] PromptPay Multiple Accounts === */
+  ST.migratePromptPay();
+  var ppAccounts = ST.getPromptPayAccounts();
+
   html += '<div class="card mb-16">';
-  html += '<div class="card-header"><div class="card-title">📱 QR PromptPay</div></div>';
+  html += '<div class="card-header">';
+  html += '<div class="card-title">📱 QR PromptPay</div>';
+  html += '<button class="btn btn-primary btn-sm" onclick="modalEditPromptPay(null)">➕ เพิ่มบัญชี</button>';
+  html += '</div>';
 
   html += '<div class="form-group">';
   html += '<label class="toggle-wrap" onclick="toggleToggle(this)">';
@@ -149,30 +287,49 @@ function renderShopSettings() {
   html += '</label>';
   html += '</div>';
 
-  html += '<div class="form-group">';
-  html += '<label class="form-label">เบอร์โทร หรือ เลขบัตรประชาชน</label>';
-  html += '<input type="text" id="cfgPPId" value="' + sanitize(cfg.promptPayId || '') + '" placeholder="0812345678 หรือ 13 หลัก" inputmode="numeric">';
-  html += '<div class="form-hint">เบอร์โทร 10 หลัก หรือ เลขบัตร 13 หลัก</div>';
-  html += '</div>';
-
-  html += '<div class="form-group">';
-  html += '<label class="form-label">ชื่อบัญชี (แสดงบน QR)</label>';
-  html += '<input type="text" id="cfgPPName" value="' + sanitize(cfg.promptPayName || '') + '" placeholder="ชื่อร้าน หรือ ชื่อเจ้าของ">';
-  html += '</div>';
-
-  if (cfg.promptPayId) {
-    html += '<div class="text-center mt-8">';
-    html += '<div class="text-muted fs-sm mb-4">ตัวอย่าง QR (฿100)</div>';
-    html += '<div class="qr-frame" style="display:inline-block;">';
-    html += '<img src="' + getPromptPayQRUrl(cfg.promptPayId, 100, 150) + '" style="width:150px;height:150px;border-radius:8px;">';
+  if (ppAccounts.length === 0) {
+    html += '<div class="text-muted text-center p-16">ยังไม่มีบัญชี — กด "เพิ่มบัญชี"</div>';
+  } else {
+    html += '<div class="admin-actions">';
+    for (var pp = 0; pp < ppAccounts.length; pp++) {
+      var ppa = ppAccounts[pp];
+      html += '<div class="admin-action-card" style="padding:10px 14px;" onclick="modalEditPromptPay(findById(ST.getPromptPayAccounts(),\'' + sanitize(ppa.id) + '\'))">';
+      html += '<div class="flex gap-8" style="align-items:center;flex:1;">';
+      html += '<span style="font-size:20px;">📱</span>';
+      html += '<div>';
+      html += '<div class="fw-600">' + sanitize(ppa.name || 'ไม่มีชื่อ') + '</div>';
+      if (typeof formatPromptPayId === 'function') {
+        html += '<div class="text-muted fs-sm">' + formatPromptPayId(ppa.ppId) + '</div>';
+      }
+      html += '</div>';
+      html += '</div>';
+      html += '<div class="flex gap-6" style="align-items:center;">';
+      if (ppa.isDefault) {
+        html += '<span class="badge badge-success">ค่าเริ่มต้น</span>';
+      } else {
+        html += '<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); setDefaultPP(\'' + sanitize(ppa.id) + '\')">ตั้งเป็นหลัก</button>';
+      }
+      html += '<span class="text-muted">✏️</span>';
+      html += '</div>';
+      html += '</div>';
+    }
     html += '</div>';
-    html += '<div class="text-muted fs-sm mt-4">' + formatPromptPayId(cfg.promptPayId) + '</div>';
-    html += '</div>';
+
+    /* Preview default QR */
+    var defPP = ST.getDefaultPromptPay();
+    if (defPP && typeof getPromptPayQRUrl === 'function') {
+      html += '<div class="text-center mt-8">';
+      html += '<div class="text-muted fs-sm mb-4">QR บัญชีหลัก (฿100)</div>';
+      html += '<div class="qr-frame" style="display:inline-block;">';
+      html += '<img src="' + getPromptPayQRUrl(defPP.ppId, 100, 150) + '" style="width:150px;height:150px;border-radius:8px;">';
+      html += '</div>';
+      html += '</div>';
+    }
   }
 
-  html += '</div>';
+  html += '</div>'; /* end PromptPay card */
 
-  /* === [Standard Version] Sales Channels === */
+  /* === Sales Channels === */
   html += '<div class="card mb-16">';
   html += '<div class="card-header">';
   html += '<div class="card-title">🛵 ช่องทางการขาย</div>';
@@ -198,6 +355,24 @@ function renderShopSettings() {
   }
   html += '</div>';
 
+  html += '</div>'; /* end Channels card */
+
+    /* === [Pro] Line Notify === */
+  html += '<div class="card mb-16">';
+  html += '<div class="card-header"><div class="card-title">💬 LINE Notify</div></div>';
+
+  html += '<div class="form-group">';
+  html += '<label class="form-label">LINE Notify Token</label>';
+  html += '<input type="text" id="cfgLineToken" value="' + sanitize(cfg.lineNotifyToken || '') + '" placeholder="xxxxxxxxxxxxxxx">';
+  html += '<div class="form-hint">สร้าง Token ที่ <a href="https://notify-bot.line.me" target="_blank">notify-bot.line.me</a></div>';
+  html += '</div>';
+
+  html += '<div class="flex gap-8 flex-wrap">';
+  html += '<button class="btn btn-secondary btn-sm" onclick="testLineNotify()">🔔 ทดสอบส่ง</button>';
+  html += '<button class="btn btn-primary btn-sm" onclick="sendDailySummaryLine()">📊 ส่งสรุปวันนี้</button>';
+  html += '<button class="btn btn-secondary btn-sm" onclick="copyDailySummary()">📋 Copy สรุป</button>';
+  html += '</div>';
+
   html += '</div>';
 
   /* === Quick Cash === */
@@ -219,7 +394,7 @@ function renderShopSettings() {
   }
   html += '</div>';
 
-  html += '</div>';
+  html += '</div>'; /* end Quick Cash card */
 
   /* === Receipt === */
   html += '<div class="card mb-16">';
@@ -239,7 +414,7 @@ function renderShopSettings() {
   html += '<input type="text" id="cfgReceiptFooter" value="' + sanitize(cfg.receiptFooter || '') + '" placeholder="ขอบคุณที่ใช้บริการ">';
   html += '</div>';
 
-  html += '</div>';
+  html += '</div>'; /* end Receipt card */
 
   /* === Theme === */
   html += '<div class="card mb-16">';
@@ -256,7 +431,51 @@ function renderShopSettings() {
   html += '</div>';
   html += '</div>';
 
+  html += '</div>'; /* end Theme card */
+
+   /* Hold Order Settings */
+html += '<div class="card mb-16">';
+html += '<div class="card-header"><div class="card-title">💾 การตั้งค่าออเดอร์ค้าง</div></div>';
+html += '<div class="form-group">';
+html += '<label class="toggle-wrap" onclick="toggleToggle(this)">';
+html += '<div class="toggle' + (cfg.autoClearHoldOrder ? ' on' : '') + '" id="cfgAutoClearHold"></div>';
+html += '<span>ล้างออเดอร์ค้างอัตโนมัติ (7 วัน)</span>';
+html += '</label>';
+html += '</div>';
+html += '</div>';
+
+/* === Auto Refresh Settings (Pro) === */
+if (typeof FeatureManager !== 'undefined' && FeatureManager.isEnabled('pro_realtime')) {
+  html += '<div class="card mb-16">';
+  html += '<div class="card-header"><div class="card-title">🔄 Real-time Dashboard</div></div>';
+  html += '<div class="form-group">';
+  html += '<label class="toggle-wrap" onclick="toggleToggle(this)">';
+  html += '<div class="toggle' + (cfg.autoRefreshEnabled ? ' on' : '') + '" id="cfgAutoRefresh"></div>';
+  html += '<span>เปิด Auto-refresh หน้ารายงาน</span>';
+  html += '</label>';
   html += '</div>';
+  html += '<div class="form-group">';
+  html += '<label class="form-label">Interval (วินาที)</label>';
+  html += '<input type="number" id="cfgAutoRefreshInterval" value="' + (cfg.autoRefreshInterval || 30) + '" min="10" max="300" step="5">';
+  html += '</div>';
+  html += '</div>';
+}
+
+/* === Kitchen Display Button === */
+if (typeof FeatureManager !== 'undefined' && FeatureManager.isEnabled('pro_kds')) {
+  html += '<div class="card mb-16">';
+  html += '<div class="card-header">';
+  html += '<div class="card-title">🍳 Kitchen Display</div>';
+  html += '</div>';
+  html += '<div class="text-center p-16">';
+  html += '<div style="font-size:48px;margin-bottom:12px;">🍳</div>';
+  html += '<div class="fw-600 mb-4">เปิดจอแสดงผลสำหรับครัว</div>';
+  html += '<div class="text-muted fs-sm mb-12">แยกหน้าต่างสำหรับพนักงานครัว ดูออเดอร์ที่เข้ามา</div>';
+  html += '<button class="btn btn-primary" onclick="openKitchenDisplayFromAdmin()" style="padding:10px 24px;">';
+  html += '🖥️ เปิด Kitchen Display</button>';
+  html += '</div>';
+  html += '</div>';
+}
 
   /* === Save Button === */
   html += '<button class="btn btn-primary btn-lg btn-block" onclick="saveShopSettings()">💾 บันทึกการตั้งค่า</button>';
@@ -264,20 +483,37 @@ function renderShopSettings() {
   return html;
 }
 
+/* ============================================
+   SAVE SHOP SETTINGS
+   ============================================ */
 function saveShopSettings() {
   var cfg = ST.getConfig();
 
   cfg.shopName = ($('cfgShopName') || {}).value || 'Coffee POS';
   cfg.currency = ($('cfgCurrency') || {}).value || '฿';
   cfg.orderPrefix = ($('cfgOrderPrefix') || {}).value || '#';
+
+  /* Feature toggles */
+  cfg.showStock = hasClass($('cfgShowStock'), 'on');
+  cfg.showStaff = hasClass($('cfgShowStaff'), 'on');
+
+  /* VAT / SC */
   cfg.vatEnabled = hasClass($('cfgVatEnabled'), 'on');
   cfg.vatRate = parseFloat(($('cfgVatRate') || {}).value) || 7;
   cfg.serviceChargeEnabled = hasClass($('cfgSCEnabled'), 'on');
   cfg.serviceChargeRate = parseFloat(($('cfgSCRate') || {}).value) || 10;
+
+  /* Sound */
   cfg.soundEnabled = hasClass($('cfgSoundEnabled'), 'on');
+
+  /* PromptPay */
+  var ppIdEl = $('cfgPPId');
+  var ppNameEl = $('cfgPPName');
   cfg.promptPayEnabled = hasClass($('cfgPPEnabled'), 'on');
-  cfg.promptPayId = ($('cfgPPId') || {}).value.replace(/[^0-9]/g, '') || '';
-  cfg.promptPayName = ($('cfgPPName') || {}).value || '';
+  cfg.promptPayId = (ppIdEl && ppIdEl.value) ? ppIdEl.value.replace(/[^0-9]/g, '') : '';
+  cfg.promptPayName = (ppNameEl && ppNameEl.value) ? ppNameEl.value : '';
+
+  /* Receipt */
   cfg.receiptWidth = ($('cfgReceiptWidth') || {}).value || '80mm';
   cfg.receiptFooter = ($('cfgReceiptFooter') || {}).value || 'ขอบคุณที่ใช้บริการ';
 
@@ -291,11 +527,37 @@ function saveShopSettings() {
   }
   if (qcArr.length === 0) qcArr = [20, 50, 100, 500, 1000];
   cfg.quickCashAmounts = qcArr;
+  
+  /* LINE Notify */
+  var lineTokenEl = $('cfgLineToken');
+  cfg.lineNotifyToken = (lineTokenEl && lineTokenEl.value) ? lineTokenEl.value.trim() : '';
 
+  /* Auto Refresh */
+  cfg.autoRefreshEnabled = hasClass($('cfgAutoRefresh'), 'on');
+  cfg.autoRefreshInterval = parseInt(($('cfgAutoRefreshInterval') || {}).value) || 30;
+
+  /* ===== NEW: Hold Order Settings (เพิ่มตรงนี้) ===== */
+  cfg.autoClearHoldOrder = hasClass($('cfgAutoClearHold'), 'on');
+
+  /* Save config */
   ST.saveConfig(cfg);
+  
+  /* Apply settings */
   applyShopName();
+
+  if (typeof applyFeatureToggle === 'function') applyFeatureToggle();
+
+  if (typeof AutoRefresh !== 'undefined') {
+    if (cfg.autoRefreshEnabled) {
+      AutoRefresh.setEnabled(true);
+      AutoRefresh.setInterval(cfg.autoRefreshInterval);
+    } else {
+      AutoRefresh.setEnabled(false);
+    }
+  }
+
   toast('บันทึกการตั้งค่าแล้ว', 'success');
-  playSound('success');
+  if (typeof playSound === 'function') playSound('success');
 }
 
 function setThemeFromAdmin(theme) {
@@ -309,7 +571,6 @@ function setThemeFromAdmin(theme) {
   renderAdminView();
   toast(theme === 'dark' ? 'Dark Mode' : 'Light Mode', 'info', 1200);
 }
-
 /* ============================================
    [Standard Version] CHANNEL FUNCTIONS
    ============================================ */
@@ -638,7 +899,7 @@ function pinSubmit() {
     setText('topStaff', '👤 ' + staff.name);
     closeMForce();
     toast('ยินดีต้อนรับ ' + staff.name, 'success');
-    playSound('success');
+    if (typeof playSound === 'function') playSound('success');
     var activeShift = ST.getActiveShift(staff.id);
     if (!activeShift) {
       ST.clockIn(staff.id);
@@ -650,7 +911,7 @@ function pinSubmit() {
     el.value = '';
     updatePinDots(0);
     vibrate(100);
-    playSound('error');
+    if (typeof playSound === 'function') playSound('error');
   }
 }
 
@@ -704,9 +965,9 @@ function renderDataSettings() {
 
   html += adminActionCard('📥', 'Backup JSON', 'ดาวน์โหลดข้อมูลทั้งหมด', 'exportJSON()');
   html += adminActionCard('📤', 'Restore JSON', 'นำเข้าจากไฟล์ JSON', 'importJSONTrigger()');
-  html += adminActionCard('📊', 'Export ยอดขาย CSV', 'ออเดอร์ทั้งหมด สำหรับ Excel', 'exportCSVOrders()');
+  html += adminActionCard('📊', 'Export ยอดขาย CSV', 'ออเดอร์สำหรับ Excel', 'exportCSVOrders()');
   html += adminActionCard('📋', 'Export เมนู CSV', 'รายการเมนูทั้งหมด', 'exportCSVMenu()');
-  html += adminActionCard('📝', 'Copy สรุปวันนี้', 'คัดลอกวางใน Line / Sheets', 'copySalesReport()');
+  html += adminActionCard('📝', 'Copy สรุปวันนี้', 'คัดลอกวาง Line / Sheets', 'copySalesReport()');
 
   html += '</div></div>';
 
@@ -750,6 +1011,7 @@ function resetAllData() {
     APP.currentStaff = null;
     setText('topStaff', '');
     applyShopName();
+    if (typeof applyFeatureToggle === 'function') applyFeatureToggle();
     toast('Reset แล้ว', 'warning');
     nav('pos');
   });
@@ -778,6 +1040,7 @@ function importJSONFile(input) {
         ST.importAll(data);
         applyShopName();
         applyTheme();
+        if (typeof applyFeatureToggle === 'function') applyFeatureToggle();
         renderAdminView();
       });
     } catch (err) {
@@ -797,7 +1060,7 @@ function renderAboutPage() {
   html += '<div class="card text-center p-20 mb-16">';
   html += '<div style="font-size:64px;margin-bottom:12px;">☕</div>';
   html += '<div class="fw-800 fs-xl mb-4">Coffee POS</div>';
-  html += '<div class="text-muted mb-4">Standard Version 1.1</div>';
+  html += '<div class="text-muted mb-4">Standard Version 1.2</div>';
   html += '<div class="text-muted fs-sm">ระบบ POS สำหรับร้านกาแฟ</div>';
   html += '</div>';
 
@@ -810,6 +1073,8 @@ function renderAboutPage() {
   html += aboutRow('Hosting', 'GitHub Pages');
   html += aboutRow('PWA', 'Service Worker + Offline');
   html += aboutRow('Theme', 'Dark / Light');
+  html += aboutRow('Payment', 'Cash / Transfer / PromptPay QR');
+  html += aboutRow('Channels', 'Walk-in / Grab / LINE MAN / Custom');
   html += '</div></div>';
 
   html += '<div class="card mb-16">';
@@ -836,6 +1101,113 @@ function renderAboutPage() {
 
 function aboutRow(label, value) {
   return '<div class="about-row"><span class="fw-600">' + sanitize(label) + '</span><span class="text-muted">' + sanitize(value) + '</span></div>';
+}
+
+/* ============================================
+   [Pro] PROMPTPAY ACCOUNT MODAL
+   ============================================ */
+function modalEditPromptPay(acc) {
+  var isNew = !acc;
+  var a = acc || {};
+
+  var html = '';
+  html += '<div class="form-group">';
+  html += '<label class="form-label">ชื่อบัญชี *</label>';
+  html += '<input type="text" id="fPPName" value="' + sanitize(a.name || '') + '" placeholder="เช่น บัญชีร้าน, บัญชีส่วนตัว">';
+  html += '</div>';
+
+  html += '<div class="form-group">';
+  html += '<label class="form-label">เบอร์โทร หรือ เลขบัตรประชาชน *</label>';
+  html += '<input type="text" id="fPPId" value="' + sanitize(a.ppId || '') + '" placeholder="0812345678" inputmode="numeric">';
+  html += '<div class="form-hint">เบอร์โทร 10 หลัก หรือ เลขบัตร 13 หลัก</div>';
+  html += '</div>';
+
+  html += '<div class="form-group">';
+  html += '<label class="toggle-wrap" onclick="toggleToggle(this)">';
+  html += '<div class="toggle' + (a.isDefault ? ' on' : '') + '" id="fPPDefault"></div>';
+  html += '<span>ตั้งเป็นบัญชีหลัก</span>';
+  html += '</label>';
+  html += '</div>';
+
+  /* Preview */
+  html += '<div id="ppPreviewArea"></div>';
+
+  html += '<input type="hidden" id="fPPAccId" value="' + sanitize(a.id || '') + '">';
+
+  var footer = '';
+  if (!isNew) footer += '<button class="btn btn-danger btn-sm" onclick="deletePPFromModal()">🗑 ลบ</button>';
+  footer += '<button class="btn btn-secondary" onclick="closeMForce()">ยกเลิก</button>';
+  footer += '<button class="btn btn-primary" onclick="savePPFromModal()">' + (isNew ? '➕ เพิ่ม' : '💾 บันทึก') + '</button>';
+
+  openModal(isNew ? '➕ เพิ่มบัญชี PromptPay' : '✏️ แก้ไขบัญชี', html, footer);
+}
+
+function savePPFromModal() {
+  var id = ($('fPPAccId') || {}).value;
+  var name = ($('fPPName') || {}).value.trim();
+  var ppId = ($('fPPId') || {}).value.replace(/[^0-9]/g, '');
+  if (!name) { toast('กรุณาใส่ชื่อบัญชี', 'error'); return; }
+  if (!ppId || (ppId.length !== 10 && ppId.length !== 13)) {
+    toast('เบอร์โทร 10 หลัก หรือ เลขบัตร 13 หลัก', 'error');
+    return;
+  }
+  var isDefault = hasClass($('fPPDefault'), 'on');
+
+  if (id) {
+    ST.updatePromptPayAccount(id, { name: name, ppId: ppId });
+    if (isDefault) ST.setDefaultPromptPay(id);
+    toast('อัพเดตแล้ว', 'success');
+  } else {
+    var acc = ST.addPromptPayAccount({ name: name, ppId: ppId, isDefault: isDefault });
+    if (isDefault) ST.setDefaultPromptPay(acc.id);
+    toast('เพิ่มแล้ว', 'success');
+  }
+  closeMForce();
+  renderAdminView();
+}
+
+function deletePPFromModal() {
+  var id = ($('fPPAccId') || {}).value;
+  if (!id) return;
+  confirmDialog('ลบบัญชีนี้?', function() {
+    ST.deletePromptPayAccount(id);
+    closeMForce();
+    toast('ลบแล้ว', 'warning');
+    renderAdminView();
+  });
+}
+
+function setDefaultPP(id) {
+  ST.setDefaultPromptPay(id);
+  toast('ตั้งเป็นบัญชีหลักแล้ว', 'success');
+  renderAdminView();
+}
+
+/* ============================================
+   [Pro] LINE NOTIFY FUNCTIONS
+   ============================================ */
+function testLineNotify() {
+  var token = ($('cfgLineToken') || {}).value.trim();
+  if (!token) { toast('กรุณาใส่ Token', 'error'); return; }
+  var msg = '\n🔔 ทดสอบจาก ' + (ST.getConfig().shopName || 'Coffee POS') + '\n✅ เชื่อมต่อสำเร็จ!';
+  sendLineNotify(token, msg, function(ok) {
+    if (ok) toast('✅ ส่งสำเร็จ!', 'success');
+  });
+}
+
+function sendDailySummaryLine() {
+  var cfg = ST.getConfig();
+  var token = cfg.lineNotifyToken;
+  if (!token) { toast('กรุณาตั้งค่า LINE Token ก่อน', 'error'); return; }
+  var msg = buildDailySummaryMessage();
+  sendLineNotify(token, msg, function(ok) {
+    if (ok) toast('✅ ส่งสรุปแล้ว!', 'success');
+  });
+}
+
+function copyDailySummary() {
+  var msg = buildDailySummaryMessage();
+  copyText(msg);
 }
 
 /* ============================================
@@ -895,5 +1267,52 @@ function aboutRow(label, value) {
   style.textContent = css;
   document.head.appendChild(style);
 })();
+
+/* ============================================
+   ADMIN TAB: RECIPE (Pro Feature)
+   ============================================ */
+function renderRecipeAdminTab() {
+  /* Check if Pro feature is enabled */
+  if (typeof FeatureManager !== 'undefined' && !FeatureManager.isEnabled('pro_recipe')) {
+    return renderFeatureLockedAdmin('pro_recipe', '🧪 สูตรวัตถุดิบ (Recipe)');
+  }
+  
+  /* Return container for recipe view */
+  return '<div id="recipeViewContainer" class="recipe-container"></div>';
+}
+
+function renderFeatureLockedAdmin(featureId, featureName) {
+  var licenseTier = (typeof FeatureManager !== 'undefined') ? FeatureManager.getLicenseTier() : 'standard';
+  
+  var html = '<div class="card p-20 text-center">';
+  html += '<div style="font-size:48px;margin-bottom:12px;">🔒</div>';
+  html += '<div class="fw-700 fs-lg mb-4">' + featureName + '</div>';
+  html += '<div class="text-muted mb-4">ฟีเจอร์นี้ต้องมี Pro License</div>';
+  html += '<div class="text-muted fs-sm mb-16">License ปัจจุบัน: ' + 
+    (licenseTier === 'pro' ? '⭐ Pro' : '📦 Standard') + '</div>';
+  
+  if (licenseTier !== 'pro') {
+    html += '<button class="btn btn-primary" onclick="LicenseManager.showLicenseModal()">🔑 อัปเกรดเป็น Pro</button>';
+  } else {
+    html += '<div class="text-warning">⚠️ ฟีเจอร์นี้ถูกปิดไว้ใน Super Admin กรุณาเปิดใช้งาน</div>';
+  }
+  html += '</div>';
+  
+  return html;
+}
+
+/* ============================================
+   OPEN KITCHEN DISPLAY FROM ADMIN
+   ============================================ */
+function openKitchenDisplayFromAdmin() {
+  if (typeof KitchenDisplay !== 'undefined' && KitchenDisplay.openKitchenDisplay) {
+    KitchenDisplay.openKitchenDisplay();
+  } else {
+    /* Fallback: เปิด URL โดยตรง */
+    var kitchenUrl = window.location.href.split('#')[0] + '?mode=kitchen';
+    window.open(kitchenUrl, '_blank', 'width=1024,height=768');
+  }
+  toast('กำลังเปิด Kitchen Display...', 'info');
+}
 
 console.log('[admin.js] loaded');

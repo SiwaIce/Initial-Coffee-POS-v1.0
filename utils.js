@@ -131,6 +131,25 @@ function relativeDay(dateStr) {
   return dateStr;
 }
 
+/* === FORMAT PHONE NUMBER === */
+function formatPhoneNumber(phone) {
+  if (!phone) return '';
+  var clean = String(phone).replace(/[^0-9]/g, '');
+  if (clean.length === 10) {
+    return clean.substring(0, 3) + '-' + clean.substring(3, 6) + '-' + clean.substring(6);
+  }
+  if (clean.length === 9) {
+    return clean.substring(0, 2) + '-' + clean.substring(2, 5) + '-' + clean.substring(5);
+  }
+  return phone;
+}
+
+/* === FORMAT NUMBER (comma separated) === */
+function formatNumber(n) {
+  if (n === null || n === undefined || isNaN(n)) return '0';
+  return parseFloat(n).toLocaleString('th-TH');
+}
+
 /* === MONEY FORMAT === */
 function formatMoney(n) {
   if (n === null || n === undefined || isNaN(n)) return '0';
@@ -678,6 +697,103 @@ function getPromptPayQRUrl(ppId, amount, size) {
   var sz = size || 250;
   var payload = generatePromptPayPayload(ppId, amount || 0);
   return 'https://api.qrserver.com/v1/create-qr-code/?size=' + sz + 'x' + sz + '&data=' + encodeURIComponent(payload);
+}
+
+/* ============================================
+   [Pro] LINE NOTIFY
+   ============================================ */
+function sendLineNotify(token, message, callback) {
+  if (!token || !message) {
+    if (callback) callback(false, 'Missing token or message');
+    return;
+  }
+
+  /* Use CORS proxy since LINE API doesn't allow direct browser calls */
+  /* Option 1: Direct (works on server/Node.js, NOT browser due to CORS) */
+  /* Option 2: Use a simple proxy or Firebase Function */
+  /* For Standard: we'll use a free CORS proxy */
+
+  var proxyUrl = 'https://api.allorigins.win/raw?url=';
+  var lineUrl = 'https://notify-api.line.me/api/notify';
+
+  /* Alternative: direct fetch with no-cors (notification fires but no response) */
+  try {
+    var formData = 'message=' + encodeURIComponent(message);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', lineUrl, true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        if (callback) callback(true);
+      } else {
+        if (callback) callback(false, 'Status: ' + xhr.status);
+      }
+    };
+    xhr.onerror = function() {
+      /* CORS error — try alternative */
+      sendLineViaImage(token, message, callback);
+    };
+    xhr.send(formData);
+  } catch (e) {
+    if (callback) callback(false, e.message);
+  }
+}
+
+/* Fallback: Send via image trick (won't work in browser either) */
+/* Real solution: Use Firebase Cloud Function as proxy */
+function sendLineViaImage(token, message, callback) {
+  /* This is a known limitation — LINE Notify requires server-side call */
+  /* For now, we'll copy the message and let user send manually */
+  toast('⚠️ LINE Notify ต้องใช้ Server — คัดลอกข้อความแล้ววางใน LINE แทน', 'warning', 5000);
+  copyText(message);
+  if (callback) callback(false, 'CORS blocked');
+}
+
+function buildDailySummaryMessage() {
+  var cfg = ST.getConfig();
+  var sales = ST.getTodaySales();
+  var orders = ST.getTodayOrders();
+  var completed = [];
+  for (var i = 0; i < orders.length; i++) {
+    if (orders[i].status !== 'cancelled') completed.push(orders[i]);
+  }
+
+  var payCash = 0, payTransfer = 0, payQr = 0;
+  for (var p = 0; p < completed.length; p++) {
+    var amt = completed[p].total || 0;
+    if (completed[p].payment === 'cash') payCash += amt;
+    else if (completed[p].payment === 'transfer') payTransfer += amt;
+    else payQr += amt;
+  }
+
+  var lines = [];
+  lines.push('\n☕ ' + cfg.shopName + ' — สรุปวันนี้');
+  lines.push('📅 ' + todayStr() + ' ' + nowTimeStr());
+  lines.push('━━━━━━━━━━━━');
+  lines.push('💰 ยอดขาย: ' + formatMoneySign(sales.total));
+  lines.push('🧾 ออเดอร์: ' + sales.count + ' บิล');
+  if (sales.count > 0) {
+    lines.push('📊 เฉลี่ย: ' + formatMoneySign(roundTo(sales.total / sales.count, 0)) + '/บิล');
+  }
+  lines.push('━━━━━━━━━━━━');
+  if (payCash > 0) lines.push('💵 เงินสด: ' + formatMoneySign(payCash));
+  if (payTransfer > 0) lines.push('📱 โอน: ' + formatMoneySign(payTransfer));
+  if (payQr > 0) lines.push('📷 QR: ' + formatMoneySign(payQr));
+
+  /* Top 5 */
+  var products = aggregateProducts(completed);
+  if (products.length > 0) {
+    var sorted = sortBy(products, 'qty', true);
+    lines.push('━━━━━━━━━━━━');
+    lines.push('🏆 Top 5:');
+    for (var t = 0; t < sorted.length && t < 5; t++) {
+      lines.push((t + 1) + '. ' + sorted[t].name + ' x' + sorted[t].qty);
+    }
+  }
+
+  return lines.join('\n');
 }
 
 console.log('[utils.js] loaded');

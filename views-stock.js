@@ -532,7 +532,7 @@ function logGoPage(page) {
   css += '.stock-alert-item.zero{border-color:var(--danger);background:rgba(239,68,68,0.05);}';
 
   /* Stock grid */
-  css += '.stock-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;}';
+  css += '.stock-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;}';
 
   /* Stock card */
   css += '.stock-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;transition:all var(--transition);}';
@@ -540,15 +540,16 @@ function logGoPage(page) {
   css += '.stock-card.low{border-left:3px solid var(--warning);}';
   css += '.stock-card.zero{border-left:3px solid var(--danger);background:rgba(239,68,68,0.03);}';
 
-  /* Stock qty */
-  css += '.stock-qty{font-size:24px;font-weight:800;}';
+  /* Stock qty — bigger and bolder */
+  css += '.stock-qty{font-size:28px;font-weight:800;line-height:1;}';
 
-  /* Stock bar */
-  css += '.stock-bar{width:100%;height:6px;background:var(--border);border-radius:3px;overflow:hidden;}';
-  css += '.stock-bar-fill{height:100%;border-radius:3px;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);}';
+  /* Stock bar — thicker */
+  css += '.stock-bar{width:100%;height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-top:4px;}';
+  css += '.stock-bar-fill{height:100%;border-radius:4px;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);}';
 
-  /* Stock actions */
-  css += '.stock-actions{display:flex;gap:6px;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--border);}';
+  /* Stock actions — cleaner */
+  css += '.stock-actions{display:flex;gap:6px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--border);margin-top:10px;}';
+  css += '.stock-actions .btn{flex:1;min-width:0;justify-content:center;}';
 
   /* Log styles */
   css += '.log-date-header{display:flex;align-items:center;justify-content:space-between;padding:10px 0 6px;margin-top:8px;border-bottom:1px solid var(--border);}';
@@ -563,8 +564,8 @@ function logGoPage(page) {
   css += '@media(max-width:768px){';
   css += '.stock-grid{grid-template-columns:1fr;}';
   css += '.stock-alert-item{flex-direction:column;align-items:flex-start;gap:8px;}';
-  css += '.stock-alert-item .flex.gap-8{width:100%;}';
-  css += '.stock-alert-item .btn{flex:1;}';
+  css += '.stock-alert-item .btn{width:100%;}';
+  css += '.stock-qty{font-size:24px;}';
   css += '}';
 
   var style = document.createElement('style');
