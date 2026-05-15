@@ -302,7 +302,8 @@ function rowsToCSV(rows) {
     }
     lines.push(cells.join(','));
   }
-  return lines.join('\n');
+  /* เพิ่ม BOM สำหรับ UTF-8 ที่บรรทัดแรก */
+  return '\uFEFF' + lines.join('\n');
 }
 
 /* ============================================

@@ -40,6 +40,8 @@ function renderReportView() {
   html += rptSubTab('daily', '📅 รายวัน');
   html += rptSubTab('compare', '📈 เปรียบเทียบ');
   html += rptSubTab('advanced', '💰 กำไรสุทธิ');
+  html += rptSubTab('stock', '📦 สต็อก');
+  html += rptSubTab('staff', '👥 พนักงาน');
   html += '</div>';
 
   /* Content */
@@ -149,7 +151,9 @@ function renderReportContent() {
     case 'hourly': return renderHourlyReport();
     case 'daily': return renderDailyReport();
     case 'compare': return renderCompareReport();
-    case 'advanced': return renderAdvancedReport();   
+    case 'advanced': return renderAdvancedReport();
+    case 'stock': return renderStockSummaryReport(); 
+    case 'staff': return renderStaffSalesReport();   
     default: return '';
   }
 }
@@ -1052,8 +1056,6 @@ function compareCard(label, current, previous, isMoney) {
   document.head.appendChild(style);
 })();
 
-console.log('[views-report.js] loaded');
-
 /* ============================================
    [Pro] ADVANCED REPORT (COGS + Profit)
    ============================================ */
@@ -1070,6 +1072,25 @@ function renderAdvancedReport() {
     return '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">ไม่มีข้อมูลในช่วงนี้</div></div>';
   }
   
+  /* Helper function to get cost (manual or auto) */
+  function getMenuItemCost(menuId, size, menuItem) {
+    if (!menuItem) {
+      var allMenus = ST.getMenu();
+      menuItem = findById(allMenus, menuId);
+    }
+    if (!menuItem) return 0;
+    
+    /* ถ้าเปิดใช้ Auto Cost และมี Pro Recipe */
+    if (menuItem.useAutoCost && typeof FeatureManager !== 'undefined' && FeatureManager.isEnabled('pro_recipe')) {
+      var recipe = ST.getRecipe(menuId, size);
+      if (recipe) {
+        return ST.calculateRecipeCost(recipe);
+      }
+    }
+    /* Fallback ใช้ cost ที่กรอกเอง */
+    return menuItem.cost || 0;
+  }
+  
   var productData = aggregateProducts(orders);
   var productWithCost = [];
   var totalSales = 0;
@@ -1078,30 +1099,22 @@ function renderAdvancedReport() {
   for (var i = 0; i < productData.length; i++) {
     var p = productData[i];
     var menu = findById(menuItems, p.menuId);
-    var recipe = ST.getRecipe(p.menuId, null); // Need size logic
     
-    /* Find recipe that matches size from order items */
-    var actualRecipe = null;
+    /* Find actual size used from orders */
     var actualSize = '';
-    
-    /* Look through orders to find actual size used */
     for (var o = 0; o < orders.length; o++) {
       var items = orders[o].items || [];
       for (var it = 0; it < items.length; it++) {
         if (items[it].menuId === p.menuId && items[it].size) {
           actualSize = items[it].size;
-          actualRecipe = ST.getRecipe(p.menuId, actualSize);
           break;
         }
       }
-      if (actualRecipe) break;
+      if (actualSize) break;
     }
     
-    var costPerUnit = 0;
-    if (actualRecipe) {
-      costPerUnit = ST.calculateRecipeCost(actualRecipe);
-    }
-    
+    /* ใช้ฟังก์ชัน getMenuItemCost */
+    var costPerUnit = getMenuItemCost(p.menuId, actualSize, menu);
     var totalCost = costPerUnit * p.qty;
     var profit = p.sales - totalCost;
     var profitMargin = p.sales > 0 ? roundTo((profit / p.sales) * 100, 1) : 0;
@@ -1114,7 +1127,8 @@ function renderAdvancedReport() {
       totalCost: totalCost,
       profit: profit,
       profitMargin: profitMargin,
-      size: actualSize
+      size: actualSize,
+      useAutoCost: menu ? menu.useAutoCost : false
     });
     
     totalSales += p.sales;
@@ -1149,12 +1163,14 @@ function renderAdvancedReport() {
   html += '<th class="text-right">ต้นทุนรวม</th>';
   html += '<th class="text-right">กำไร</th>';
   html += '<th class="text-right">% กำไร</th>';
+  html += '<th class="text-center">ต้นทาง</th>';
   html += '</tr></thead>';
   html += '<tbody>';
   
   for (var t = 0; t < topProfit.length; t++) {
     var pp = topProfit[t];
     var marginClass = pp.profitMargin >= 50 ? 'text-success' : (pp.profitMargin >= 30 ? 'text-warning' : 'text-danger');
+    var costSource = pp.useAutoCost ? '🧪 Auto' : '✏️ Manual';
     
     html += '<tr>';
     html += '<td class="fw-600">' + sanitize(pp.name) + (pp.size ? ' (' + pp.size + ')' : '') + '</td>';
@@ -1163,7 +1179,8 @@ function renderAdvancedReport() {
     html += '<td class="text-right">' + formatMoneySign(pp.costPerUnit) + '</td>';
     html += '<td class="text-right text-danger">' + formatMoneySign(pp.totalCost) + '</td>';
     html += '<td class="text-right text-success fw-700">' + formatMoneySign(pp.profit) + '</td>';
-    html += '<td class="text-right ' + marginClass + ' fw-700">' + pp.profitMargin + '%</td>';
+    html += '<td class="text-right ' + marginClass + ' fw-700">' + pp.profitMargin + '%' + '</td>';
+    html += '<td class="text-center"><span class="badge badge-info">' + costSource + '</span>' + '</td>';
     html += '</tr>';
   }
   
@@ -1179,17 +1196,19 @@ function renderAdvancedReport() {
     html += '<div class="card-header"><div class="card-title text-warning">⚠️ เมนูที่มีกำไรต่ำ (&lt;30%)</div></div>';
     html += '<div class="table-wrap">';
     html += '<table>';
-    html += '<thead><tr><th>เมนู</th><th class="text-right">ยอดขาย</th><th class="text-right">กำไร</th><th class="text-right">% กำไร</th></tr></thead>';
+    html += '<thead><tr><th>เมนู</th><th class="text-right">ยอดขาย</th><th class="text-right">กำไร</th><th class="text-right">% กำไร</th><th class="text-center">ต้นทาง</th></tr></thead>';
     html += '<tbody>';
     
     for (var l = 0; l < lowMargin.length; l++) {
       var lm = lowMargin[l];
+      var costSource = lm.useAutoCost ? '🧪 Auto' : '✏️ Manual';
       html += '<tr>';
-      html += '<td>' + sanitize(lm.name) + '</td>';
+      html += '<td class="fw-600">' + sanitize(lm.name) + (lm.size ? ' (' + lm.size + ')' : '') + '</td>';
       html += '<td class="text-right">' + formatMoneySign(lm.sales) + '</td>';
       html += '<td class="text-right">' + formatMoneySign(lm.profit) + '</td>';
-      html += '<td class="text-right text-danger">' + lm.profitMargin + '%</td>';
-      html += '</tr>';
+      html += '<td class="text-right text-danger">' + lm.profitMargin + '%' + '</td>';
+      html += '<td class="text-center"><span class="badge badge-info">' + costSource + '</span>' + '</td>';
+      html += '<tr>';
     }
     
     html += '</tbody>';
@@ -1197,6 +1216,83 @@ function renderAdvancedReport() {
     html += '</div>';
     html += '</div>';
   }
+  
+  return html;
+}
+
+/* ============================================
+   STOCK SUMMARY REPORT
+   ============================================ */
+function renderStockSummaryReport() {
+  if (!FeatureManager.isEnabled('pro_advanced_report')) {
+    return '<div class="card p-20 text-center">🔒 ต้องมี Pro License</div>';
+  }
+  
+  var stockItems = ST.getStock();
+  var logs = ST.getStockLogs();
+  var today = todayStr();
+  var usageSummary = ST.getStockUsageSummary(30);
+  
+  var todayUsage = getStockUsageByDate(logs, today, 'usage');
+  var todayReceive = getStockUsageByDate(logs, today, 'receive');
+  
+  var totalValue = calculateTotalStockValue(stockItems);
+  var lowStock = ST.getLowStock();
+  
+  var html = '';
+  
+  /* KPI Cards */
+  html += '<div class="kpi-grid mb-16">';
+  html += '<div class="kpi-card"><div class="kpi-icon">📊</div><div class="kpi-value">' + formatNumber(todayUsage) + '</div><div class="kpi-label">ใช้ไปวันนี้</div></div>';
+  html += '<div class="kpi-card"><div class="kpi-icon">📥</div><div class="kpi-value">' + formatNumber(todayReceive) + '</div><div class="kpi-label">รับเข้าวันนี้</div></div>';
+  html += '<div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-value">' + formatMoneySign(totalValue) + '</div><div class="kpi-label">มูลค่าคงเหลือ</div></div>';
+  html += '<div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-value">' + lowStock.length + '</div><div class="kpi-label">รายการใกล้หมด</div></div>';
+  html += '</div>';
+  
+  /* Low Stock Alert */
+  if (lowStock.length > 0) {
+    html += '<div class="card mb-16" style="border-color:var(--warning);">';
+    html += '<div class="card-header"><div class="card-title text-warning">⚠️ วัตถุดิบใกล้หมด</div></div>';
+    for (var l = 0; l < lowStock.length; l++) {
+      var displayQty = formatStockQty(lowStock[l].qty, lowStock[l].unit, lowStock[l].bigUnit, lowStock[l].bigUnitSize);
+      var minDisplay = formatStockQty(lowStock[l].minQty, lowStock[l].unit, lowStock[l].bigUnit, lowStock[l].bigUnitSize);
+      html += '<div class="flex-between p-12" style="border-bottom:1px solid var(--border);">';
+      html += '<span class="fw-600">' + sanitize(lowStock[l].name) + '</span>';
+      html += '<span class="text-warning">เหลือ ' + displayQty + ' (ขั้นต่ำ ' + minDisplay + ')</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  
+  /* Stock List Table */
+  html += '<div class="card">';
+  html += '<div class="card-header"><div class="card-title">📋 สต็อกปัจจุบัน</div></div>';
+  html += '<div class="table-wrap">';
+  html += '<table>';
+  html += '<thead><tr><th>วัตถุดิบ</th><th class="text-right">คงเหลือ</th><th class="text-right">ต้นทุน/หน่วย</th><th class="text-right">มูลค่า</th><th class="text-right">สถานะ</th></thead>';
+  html += '<tbody>';
+  
+  for (var i = 0; i < stockItems.length; i++) {
+    var s = stockItems[i];
+    var displayQty = formatStockQty(s.qty, s.unit, s.bigUnit, s.bigUnitSize);
+    var value = (s.qty || 0) * (s.costPerUnit || 0);
+    var isLowStock = s.minQty > 0 && s.qty <= s.minQty;
+    var statusClass = isLowStock ? 'text-warning' : 'text-success';
+    var statusText = isLowStock ? '⚠️ ใกล้หมด' : '✅ ปกติ';
+    
+    html += '<tr>';
+    html += '<td class="fw-600">' + sanitize(s.name) + '</td>';
+    html += '<td class="text-right">' + displayQty + '</td>';
+    html += '<td class="text-right">' + formatMoneySign(s.costPerUnit || 0) + '</td>';
+    html += '<td class="text-right">' + formatMoneySign(value) + '</td>';
+    html += '<td class="text-right ' + statusClass + '">' + statusText + '</td>';
+    html += '</tr>';
+  }
+  
+  html += '</tbody>';
+  html += '</table>';
+  html += '</div>';
+  html += '</div>';
   
   return html;
 }
@@ -1209,3 +1305,69 @@ function renderFeatureLockedReport(featureId, featureName) {
     '<button class="btn btn-primary" onclick="LicenseManager.showLicenseModal()">🔑 อัปเกรดเป็น Pro</button>' +
     '</div>';
 }
+
+/* ============================================
+   STAFF SALES REPORT
+   ============================================ */
+function renderStaffSalesReport() {
+  var range = getRptDateRange();
+  var staffSummary = ST.getStaffSalesSummary(range.from, range.to);
+  
+  if (staffSummary.length === 0) {
+    return '<div class="empty-state"><div class="empty-icon">👥</div><div class="empty-text">ไม่มีข้อมูลในช่วงนี้</div></div>';
+  }
+  
+  var totalOrders = 0;
+  var totalSales = 0;
+  var totalItems = 0;
+  
+  for (var i = 0; i < staffSummary.length; i++) {
+    totalOrders += staffSummary[i].orderCount;
+    totalSales += staffSummary[i].totalSales;
+    totalItems += staffSummary[i].itemCount;
+  }
+  
+  var html = '';
+  
+  /* Summary Cards */
+  html += '<div class="kpi-grid mb-16">';
+  html += kpiCard('👥', staffSummary.length, 'พนักงาน', 'info');
+  html += kpiCard('🧾', totalOrders, 'ออเดอร์รวม', 'accent');
+  html += kpiCard('💰', formatMoneySign(totalSales), 'ยอดขายรวม', 'success');
+  html += kpiCard('☕', totalItems, 'สินค้าที่ขาย', 'accent2');
+  html += '</div>';
+  
+  /* Staff Table */
+  html += '<div class="card">';
+  html += '<div class="card-header"><div class="card-title">📊 สรุปยอดขายแยกพนักงาน</div></div>';
+  html += '<div class="table-wrap">';
+  html += '<table>';
+  html += '<thead>';
+  html += '<tr><th>พนักงาน</th><th class="text-right">ออเดอร์</th><th class="text-right">สินค้า</th><th class="text-right">ยอดขาย</th><th class="text-right">เฉลี่ย/ออเดอร์</th><th class="text-right">% ยอดขาย</th></tr>';
+  html += '</thead>';
+  html += '<tbody>';
+  
+  for (var i = 0; i < staffSummary.length; i++) {
+    var s = staffSummary[i];
+    var avgPerOrder = s.orderCount > 0 ? roundTo(s.totalSales / s.orderCount, 0) : 0;
+    var percentOfTotal = totalSales > 0 ? pct(s.totalSales, totalSales) : 0;
+    
+    html += '<tr>';
+    html += '<td class="fw-600">👤 ' + sanitize(s.staffName) + '</td>';
+    html += '<td class="text-right">' + s.orderCount + '  บิล</td>';
+    html += '<td class="text-right">' + s.itemCount + '  ชิ้น</td>';
+    html += '<td class="text-right fw-700 text-accent">' + formatMoneySign(s.totalSales) + '</td>';
+    html += '<td class="text-right">' + formatMoneySign(avgPerOrder) + '</td>';
+    html += '<td class="text-right">' + percentOfTotal + '%</td>';
+    html += '</tr>';
+  }
+  
+  html += '</tbody>';
+  html += '</table>';
+  html += '</div>';
+  html += '</div>';
+  
+  return html;
+}
+
+console.log('[views-report.js] loaded');

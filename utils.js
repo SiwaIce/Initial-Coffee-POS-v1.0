@@ -481,7 +481,8 @@ function fallbackCopy(text) {
 /* === DOWNLOAD FILE === */
 function downloadFile(filename, content, mimeType) {
   var mime = mimeType || 'text/plain';
-  var blob = new Blob([content], { type: mime + ';charset=utf-8' });
+  /* เพิ่ม BOM สำหรับ UTF-8 */
+  var blob = new Blob(['\uFEFF' + content], { type: mime + ';charset=utf-8;' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
@@ -794,6 +795,59 @@ function buildDailySummaryMessage() {
   }
 
   return lines.join('\n');
+}
+
+/* ============================================
+   FORMAT STOCK QUANTITY (หน่วยใหญ่-เล็ก)
+   ============================================ */
+function formatStockQty(qty, unit, bigUnit, bigUnitSize) {
+  if (!bigUnit || !bigUnitSize || bigUnitSize <= 0) {
+    return qty + ' ' + (unit || '');
+  }
+  
+  var bigQty = Math.floor(qty / bigUnitSize);
+  var smallQty = qty % bigUnitSize;
+  
+  if (bigQty === 0 && smallQty === 0) {
+    return '0 ' + (unit || '');
+  }
+  if (bigQty === 0) {
+    return smallQty + ' ' + unit;
+  }
+  if (smallQty === 0) {
+    return bigQty + ' ' + bigUnit;
+  }
+  
+  /* แสดงทั้งหน่วยใหญ่และหน่วยย่อย */
+  return bigQty + ' ' + bigUnit + ' ' + smallQty + ' ' + unit + ' (รวม ' + qty + ' ' + unit + ')';
+}
+
+/* ============================================
+   CALCULATE TOTAL STOCK VALUE
+   ============================================ */
+function calculateTotalStockValue(stockItems) {
+  var total = 0;
+  for (var i = 0; i < stockItems.length; i++) {
+    total += (stockItems[i].qty || 0) * (stockItems[i].costPerUnit || 0);
+  }
+  return total;
+}
+
+/* ============================================
+   CALCULATE USAGE FROM STOCK LOGS
+   ============================================ */
+function getStockUsageByDate(logs, date, type) {
+  var usage = 0;
+  var receive = 0;
+  for (var i = 0; i < logs.length; i++) {
+    if (logs[i].date === date) {
+      if (logs[i].qty > 0) receive += logs[i].qty;
+      else usage += Math.abs(logs[i].qty);
+    }
+  }
+  if (type === 'usage') return usage;
+  if (type === 'receive') return receive;
+  return { usage: usage, receive: receive };
 }
 
 console.log('[utils.js] loaded');

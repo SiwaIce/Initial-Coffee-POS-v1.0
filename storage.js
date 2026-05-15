@@ -1282,4 +1282,425 @@ ST.getHoldOrderById = function(orderId) {
   return null;
 };
 
+/* ============================================
+   [Pro] STOCK WITH BIG UNIT
+   ============================================ */
+
+/* Update stock item with big unit support */
+ST.updateStockItemWithBigUnit = function(id, data) {
+  var items = ST.getStock();
+  var idx = findIndexById(items, id);
+  if (idx === -1) return null;
+  
+  for (var k in data) {
+    items[idx][k] = data[k];
+  }
+  
+  /* ถ้ามี bigUnit และ bigUnitSize ให้แปลง qty เป็นหน่วยย่อยอัตโนมัติ */
+  if (data.bigUnitQty !== undefined && data.bigUnitSize) {
+    items[idx].qty = data.bigUnitQty * data.bigUnitSize;
+  }
+  
+  items[idx].lastUpdate = todayStr();
+  ST.saveStock(items);
+  return items[idx];
+};
+
+/* Add stock item with big unit */
+ST.addStockItemWithBigUnit = function(item) {
+  var items = ST.getStock();
+  item.id = item.id || genId('stk');
+  
+  /* ถ้ามี bigUnit และ bigUnitSize ให้แปลง qty เป็นหน่วยย่อย */
+  if (item.bigUnitQty && item.bigUnitSize) {
+    item.qty = item.bigUnitQty * item.bigUnitSize;
+  } else {
+    item.qty = item.qty || 0;
+  }
+  
+  item.minQty = item.minQty || 0;
+  item.costPerUnit = item.costPerUnit || 0;
+  item.lastUpdate = todayStr();
+  items.push(item);
+  ST.saveStock(items);
+  return item;
+};
+
+/* Get stock usage summary */
+ST.getStockUsageSummary = function(days) {
+  var logs = ST.getStockLogs();
+  var usage = {};
+  var now = Date.now();
+  var dayInMs = 86400000;
+  
+  for (var i = 0; i < logs.length; i++) {
+    var log = logs[i];
+    var logTime = parseDateTime(log.date, log.time);
+    if (!logTime) continue;
+    
+    var diffDays = Math.floor((now - logTime.getTime()) / dayInMs);
+    if (diffDays > days) continue;
+    
+    var dateKey = log.date;
+    if (!usage[dateKey]) {
+      usage[dateKey] = { usage: 0, receive: 0, date: log.date };
+    }
+    
+    if (log.qty > 0) usage[dateKey].receive += log.qty;
+    else usage[dateKey].usage += Math.abs(log.qty);
+  }
+  
+  return usage;
+};
+
+/* ============================================
+   STOCK CATEGORIES
+   ============================================ */
+
+/* Get all stock categories */
+ST.getStockCategories = function() {
+  return ST.getObj('stockCategories', []);
+};
+
+/* Save stock categories */
+ST.saveStockCategories = function(cats) {
+  ST.setObj('stockCategories', cats);
+};
+
+/* Add stock category */
+ST.addStockCategory = function(cat) {
+  var cats = ST.getStockCategories();
+  cat.id = cat.id || genId('stkcat');
+  cat.sort = cat.sort || cats.length + 1;
+  cats.push(cat);
+  ST.saveStockCategories(cats);
+  return cat;
+};
+
+/* Update stock category */
+ST.updateStockCategory = function(id, data) {
+  var cats = ST.getStockCategories();
+  var idx = findIndexById(cats, id);
+  if (idx === -1) return null;
+  for (var k in data) {
+    cats[idx][k] = data[k];
+  }
+  ST.saveStockCategories(cats);
+  return cats[idx];
+};
+
+/* Delete stock category */
+ST.deleteStockCategory = function(id) {
+  var cats = ST.getStockCategories();
+  removeById(cats, id);
+  ST.saveStockCategories(cats);
+};
+
+/* Get default stock categories */
+ST._defaultStockCategories = function() {
+  return [
+    { id: 'stkcat_beverage', name: 'เครื่องดื่ม', icon: '🥤', sort: 1 },
+    { id: 'stkcat_food', name: 'อาหาร', icon: '🍔', sort: 2 },
+    { id: 'stkcat_packaging', name: 'บรรจุภัณฑ์', icon: '📦', sort: 3 },
+    { id: 'stkcat_other', name: 'อื่นๆ', icon: '📎', sort: 4 }
+  ];
+};
+
+/* Initialize stock categories if empty */
+ST.initStockCategories = function() {
+  var cats = ST.getStockCategories();
+  if (cats.length === 0) {
+    ST.saveStockCategories(ST._defaultStockCategories());
+  }
+};
+
+/* ============================================
+   STAFF SALES SUMMARY
+   ============================================ */
+ST.getStaffSalesSummary = function(dateFrom, dateTo) {
+  var orders = ST.getOrdersByRange(dateFrom, dateTo);
+  var staffMap = {};
+  
+  for (var i = 0; i < orders.length; i++) {
+    var order = orders[i];
+    if (order.status === 'cancelled') continue;
+    
+    var staffId = order.staffId || '';
+    var staffName = order.staffName || 'ไม่ระบุ';
+    var key = staffId || staffName;
+    
+    if (!staffMap[key]) {
+      staffMap[key] = {
+        staffId: staffId,
+        staffName: staffName,
+        orderCount: 0,
+        totalSales: 0,
+        itemCount: 0
+      };
+    }
+    
+    staffMap[key].orderCount++;
+    staffMap[key].totalSales += order.total || 0;
+    
+    var items = order.items || [];
+    for (var j = 0; j < items.length; j++) {
+      staffMap[key].itemCount += items[j].qty || 0;
+    }
+  }
+  
+  var result = [];
+  for (var k in staffMap) {
+    result.push(staffMap[k]);
+  }
+  
+  return sortBy(result, 'totalSales', true);
+};
+
+/* ============================================
+   STAFF PERMISSIONS (Role-Based)
+   ============================================ */
+
+/* กำหนดสิทธิ์ตามบทบาท */
+ST.getRolePermissions = function(role) {
+  var permissions = {
+    cashier: {
+      canAccess: ['pos', 'orders'],
+      canEdit: false,
+      canDelete: false,
+      maxDiscount: 10
+    },
+    barista: {
+      canAccess: ['pos', 'orders'],
+      canEdit: false,
+      canDelete: false,
+      maxDiscount: 10
+    },
+    manager: {
+      canAccess: ['pos', 'menu', 'orders', 'report', 'stock', 'staff', 'members', 'recipe', 'admin'],
+      canEdit: true,
+      canDelete: true,
+      maxDiscount: 30
+    }
+  };
+  
+  return permissions[role] || permissions.cashier;
+};
+
+ST.canAccessView = function(staff, view) {
+  if (!staff) return false;
+  
+  /* Manager เข้าถึงทุกอย่าง */
+  if (staff.role === 'manager') return true;
+  
+  /* cashier / barista */
+  var allowedViews = {
+    cashier: ['pos', 'orders'],
+    barista: ['pos', 'orders']
+  };
+  
+  var allowed = allowedViews[staff.role] || ['pos'];
+  return allowed.indexOf(view) !== -1;
+};
+
+/* เช็คว่าพนักงานสามารถแก้ไขข้อมูลได้หรือไม่ */
+ST.canEdit = function(staff) {
+  if (!staff) return false;
+  var perms = ST.getRolePermissions(staff.role);
+  return perms.canEdit;
+};
+
+/* เช็คว่าพนักงานสามารถให้ส่วนลดได้สูงสุดกี่ % */
+ST.getMaxDiscountPercent = function(staff) {
+  if (!staff) return 0;
+  var perms = ST.getRolePermissions(staff.role);
+  return perms.maxDiscount || 0;
+};
+
+/* ============================================
+   CUSTOM PERMISSIONS PER STAFF
+   ============================================ */
+
+/* เช็คสิทธิ์แบบรายบุคคล (ถ้ามีการตั้งค่า) */
+ST.canAccessViewCustom = function(staff, view) {
+  if (!staff) return false;
+  
+  /* Manager เข้าถึงทุกอย่าง */
+  if (staff.role === 'manager') return true;
+  
+  /* ถ้ามี custom permissions ให้ใช้ */
+  if (staff.customPermissions && staff.customPermissions[view] !== undefined) {
+    return staff.customPermissions[view];
+  }
+  
+  /* ใช้ค่าตาม role */
+  var perms = ST.getRolePermissions(staff.role);
+  return perms.canAccess.indexOf(view) !== -1;
+};
+
+/* ============================================
+   STAFF WORK LOG (SHIFTS)
+   ============================================ */
+
+/* Get shifts by staff and month */
+ST.getShiftsByStaffAndMonth = function(staffId, month, year) {
+  var allShifts = ST.getShifts();
+  var result = [];
+  for (var i = 0; i < allShifts.length; i++) {
+    var shift = allShifts[i];
+    if (shift.staffId !== staffId) continue;
+    
+    var shiftDate = parseDate(shift.date);
+    if (!shiftDate) continue;
+    
+    if (shiftDate.getMonth() === month && shiftDate.getFullYear() === year) {
+      result.push(shift);
+    }
+  }
+  return sortBy(result, 'timestamp', true);
+};
+
+/* Calculate total hours worked in a month */
+ST.getStaffWorkHours = function(staffId, month, year) {
+  var shifts = ST.getShiftsByStaffAndMonth(staffId, month, year);
+  var totalHours = 0;
+  for (var i = 0; i < shifts.length; i++) {
+    var shift = shifts[i];
+    if (shift.clockIn && shift.clockOut) {
+      var hours = calcShiftHours(shift);
+      totalHours += parseFloat(hours) || 0;
+    }
+  }
+  return roundTo(totalHours, 1);
+};
+
+/* Get staff work summary for display */
+ST.getStaffWorkSummary = function(staffId) {
+  var allShifts = ST.getShifts();
+  var summary = {
+    totalDays: 0,
+    totalHours: 0,
+    avgHoursPerDay: 0,
+    lastWorkDate: null,
+    shifts: []
+  };
+  
+  var shiftMap = {};
+  for (var i = 0; i < allShifts.length; i++) {
+    var shift = allShifts[i];
+    if (shift.staffId !== staffId) continue;
+    
+    var date = shift.date;
+    if (!shiftMap[date]) {
+      shiftMap[date] = [];
+    }
+    shiftMap[date].push(shift);
+    summary.shifts.push(shift);
+  }
+  
+  summary.totalDays = Object.keys(shiftMap).length;
+  
+  for (var dateKey in shiftMap) {
+    var dayShifts = shiftMap[dateKey];
+    for (var j = 0; j < dayShifts.length; j++) {
+      var s = dayShifts[j];
+      if (s.clockIn && s.clockOut) {
+        var hours = calcShiftHours(s);
+        summary.totalHours += parseFloat(hours) || 0;
+      }
+    }
+  }
+  
+  if (summary.totalDays > 0) {
+    summary.avgHoursPerDay = roundTo(summary.totalHours / summary.totalDays, 1);
+  }
+  
+  if (summary.shifts.length > 0) {
+    var latest = sortBy(summary.shifts, 'timestamp', true)[0];
+    summary.lastWorkDate = latest.date;
+  }
+  
+  return summary;
+};
+
+/* ============================================
+   STAFF WORK DETAILS WITH SALES
+   ============================================ */
+
+/* Get shifts with sales by date range */
+ST.getStaffWorkDetails = function(staffId, month, year) {
+  var shifts = ST.getShiftsByStaffAndMonth(staffId, month, year);
+  var orders = ST.getOrders();
+  
+  var details = [];
+  for (var i = 0; i < shifts.length; i++) {
+    var shift = shifts[i];
+    var shiftDate = shift.date;
+    
+    /* คำนวณยอดขายของวันนั้น */
+    var dailySales = 0;
+    var orderCount = 0;
+    for (var j = 0; j < orders.length; j++) {
+      var order = orders[j];
+      if (order.staffId === staffId && order.date === shiftDate && order.status !== 'cancelled') {
+        dailySales += order.total || 0;
+        orderCount++;
+      }
+    }
+    
+    var hours = shift.clockOut ? calcShiftHours(shift) : 0;
+    var salesPerHour = hours > 0 ? roundTo(dailySales / hours, 0) : 0;
+    
+    details.push({
+      date: shift.date,
+      clockIn: shift.clockIn,
+      clockOut: shift.clockOut || '-',
+      hours: hours,
+      dailySales: dailySales,
+      orderCount: orderCount,
+      salesPerHour: salesPerHour,
+      isActive: !shift.clockOut
+    });
+  }
+  
+  return sortBy(details, 'date', false);
+};
+
+/* Get staff performance summary */
+ST.getStaffPerformance = function(staffId, month, year) {
+  var details = ST.getStaffWorkDetails(staffId, month, year);
+  var totalHours = 0;
+  var totalSales = 0;
+  var totalOrders = 0;
+  var totalDays = 0;
+  
+  for (var i = 0; i < details.length; i++) {
+    var d = details[i];
+    if (!d.isActive) {
+      totalHours += d.hours;
+      totalSales += d.dailySales;
+      totalOrders += d.orderCount;
+      totalDays++;
+    }
+  }
+  
+  var avgSalesPerDay = totalDays > 0 ? roundTo(totalSales / totalDays, 0) : 0;
+  var avgSalesPerHour = totalHours > 0 ? roundTo(totalSales / totalHours, 0) : 0;
+  var avgOrdersPerDay = totalDays > 0 ? roundTo(totalOrders / totalDays, 1) : 0;
+  
+  var rating = '🟢 ดีมาก';
+  if (avgSalesPerHour < 300) rating = '🟡 พอใช้';
+  if (avgSalesPerHour < 150) rating = '🔴 ควรปรับปรุง';
+  
+  return {
+    totalDays: totalDays,
+    totalHours: totalHours,
+    totalSales: totalSales,
+    totalOrders: totalOrders,
+    avgSalesPerDay: avgSalesPerDay,
+    avgSalesPerHour: avgSalesPerHour,
+    avgOrdersPerDay: avgOrdersPerDay,
+    rating: rating
+  };
+};
+
 console.log('[storage.js] loaded');

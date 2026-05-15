@@ -114,25 +114,25 @@ function renderRecipeView() {
 function renderRecipeEditor(menuItems) {
   var selectedMenu = findById(menuItems, RECIPE_VIEW.selectedMenuId);
   var recipe = ST.getRecipe(RECIPE_VIEW.selectedMenuId, RECIPE_VIEW.selectedSize);
-  var stockItems = ST.getStock();
+  var stockItems = ST.getStock();  // ดึงข้อมูล Stock
   
   var html = '';
   
-  /* Menu Info */
   html += '<div class="card mb-16">';
   html += '<div class="card-header">';
   html += '<div class="card-title">' + (selectedMenu.emoji || '☕') + ' ' + sanitize(selectedMenu.name) + ' (Size ' + RECIPE_VIEW.selectedSize + ')</div>';
   html += '<button class="btn btn-primary btn-sm" onclick="modalAddRecipeIngredient()">➕ เพิ่มวัตถุดิบ</button>';
   html += '</div>';
   
-  /* Current Ingredients */
   if (recipe && recipe.ingredients && recipe.ingredients.length > 0) {
-    var totalCost = ST.calculateRecipeCost(recipe);
+    var totalCost = 0;
+    for (var i = 0; i < recipe.ingredients.length; i++) {
+      totalCost += recipe.ingredients[i].totalCost || 0;
+    }
     var sellingPrice = selectedMenu.prices ? (selectedMenu.prices[RECIPE_VIEW.selectedSize] || 0) : 0;
     var profit = sellingPrice - totalCost;
     var profitMargin = sellingPrice > 0 ? roundTo((profit / sellingPrice) * 100, 1) : 0;
     
-    /* Cost Summary */
     html += '<div class="recipe-cost-summary mb-16">';
     html += '<div class="flex gap-12 flex-wrap">';
     html += '<div><span class="text-muted fs-sm">💰 ต้นทุนวัตถุดิบ</span><div class="fw-800 text-danger">' + formatMoneySign(totalCost) + '</div></div>';
@@ -142,31 +142,24 @@ function renderRecipeEditor(menuItems) {
     html += '</div>';
     html += '</div>';
     
-    /* Ingredients Table */
     html += '<div class="table-wrap">';
     html += '<table class="recipe-ingredients-table">';
-    html += '<thead><tr>';
-    html += '<th>วัตถุดิบ</th>';
-    html += '<th class="text-right">ปริมาณ</th>';
-    html += '<th class="text-right">ต้นทุน/หน่วย</th>';
-    html += '<th class="text-right">ต้นทุนรวม</th>';
-    html += '<th class="text-center"></th>';
-    html += '</tr></thead>';
+    html += '<thead><tr><th>วัตถุดิบ</th><th class="text-right">ปริมาณ</th><th class="text-right">ต้นทุน/หน่วย</th><th class="text-right">ต้นทุนรวม</th><th class="text-center"></th></thead>';
     html += '<tbody>';
     
     for (var i = 0; i < recipe.ingredients.length; i++) {
       var ing = recipe.ingredients[i];
       var stockItem = findById(stockItems, ing.stockId);
-      var costPerUnit = stockItem ? stockItem.costPerUnit : 0;
-      var lineCost = ing.qty * costPerUnit;
+      var unitCost = stockItem ? stockItem.costPerUnit : ing.unitCost;
+      var lineCost = (ing.qty || 0) * (unitCost || 0);
       
       html += '<tr>';
-      html += '<td class="fw-600">' + sanitize(ing.stockName || (stockItem ? stockItem.name : ing.stockId)) + '</td>';
-      html += '<td class="text-right">' + formatMoney(ing.qty) + ' ' + sanitize(ing.unit || '') + '</td>';
-      html += '<td class="text-right">' + formatMoneySign(costPerUnit) + '</td>';
+      html += '<td class="fw-600">' + sanitize(ing.stockName) + '</td>';
+      html += '<td class="text-right">' + formatNumber(ing.qty) + ' ' + sanitize(ing.unit) + '</td>';
+      html += '<td class="text-right">' + formatMoneySign(unitCost) + '</td>';
       html += '<td class="text-right">' + formatMoneySign(lineCost) + '</td>';
-      html += '<td class="text-center"><button class="btn-icon" onclick="modalEditRecipeIngredient(\'' + ing.stockId + '\')" style="width:28px;height:28px;">✏️</button>';
-      html += '<button class="btn-icon" onclick="removeRecipeIngredient(\'' + ing.stockId + '\')" style="width:28px;height:28px;color:var(--danger);">🗑</button></td>';
+      html += '<td class="text-center"><button class="btn-icon" onclick="modalEditRecipeIngredient(\'' + ing.stockId + '\')">✏️</button>';
+      html += '<button class="btn-icon" onclick="removeRecipeIngredient(\'' + ing.stockId + '\')" style="color:var(--danger);">🗑</button></td>';
       html += '</tr>';
     }
     
@@ -178,12 +171,11 @@ function renderRecipeEditor(menuItems) {
     html += '<div class="text-center p-20 text-muted">';
     html += '<div style="font-size:32px;margin-bottom:8px;">🧪</div>';
     html += '<div>ยังไม่มีสูตรสำหรับเมนูนี้</div>';
-    html += '<div class="fs-sm mt-4">กด "เพิ่มวัตถุดิบ" เพื่อเริ่มต้น</div>';
+    html += '<div class="fs-sm mt-4">กด "เพิ่มวัตถุดิบ" เพื่อเริ่มต้น<br>วัตถุดิบจะดึงข้อมูลจาก Stock อัตโนมัติ</div>';
     html += '</div>';
   }
   
   html += '</div>';
-  
   return html;
 }
 
@@ -272,28 +264,50 @@ function selectRecipeFromSummary(menuId, size) {
 function modalAddRecipeIngredient() {
   var stockItems = ST.getStock();
   if (stockItems.length === 0) {
-    toast('กรุณาเพิ่มวัตถุดิบก่อน', 'warning');
+    toast('กรุณาเพิ่มวัตถุดิบใน Stock ก่อน', 'warning');
     return;
   }
   
   var html = '';
   html += '<div class="form-group">';
-  html += '<label class="form-label">วัตถุดิบ</label>';
-  html += '<select id="recipeIngredientStockId">';
+  html += '<label class="form-label">เลือกวัตถุดิบจาก Stock</label>';
+  html += '<select id="recipeIngredientStockId" onchange="updateStockUnitAndCost()">';
+  html += '<option value="">-- เลือกวัตถุดิบ --</option>';
   for (var i = 0; i < stockItems.length; i++) {
-    html += '<option value="' + sanitize(stockItems[i].id) + '">' + sanitize(stockItems[i].name) + ' (' + sanitize(stockItems[i].unit || 'หน่วย') + ')</option>';
+    var item = stockItems[i];
+    var costDisplay = formatMoneySign(item.costPerUnit || 0);
+    html += '<option value="' + sanitize(item.id) + '" data-unit="' + sanitize(item.unit) + '" data-cost="' + (item.costPerUnit || 0) + '">';
+    html += sanitize(item.name) + ' (' + costDisplay + '/' + sanitize(item.unit) + ')';
+    html += '</option>';
   }
   html += '</select>';
   html += '</div>';
   
+  html += '<div class="form-row">';
   html += '<div class="form-group">';
-  html += '<label class="form-label">ปริมาณที่ใช้ (ต่อ 1 แก้ว/ชิ้น)</label>';
-  html += '<input type="number" id="recipeIngredientQty" placeholder="0" value="1" step="0.1">';
+  html += '<label class="form-label">ปริมาณที่ใช้</label>';
+  html += '<input type="number" id="recipeIngredientQty" placeholder="0" value="1" step="0.1" oninput="updateIngredientCost()">';
+  html += '</div>';
+  html += '<div class="form-group">';
+  html += '<label class="form-label">หน่วย</label>';
+  html += '<input type="text" id="recipeIngredientUnit" readonly style="background:var(--bg-input);opacity:0.8;">';
+  html += '</div>';
+  html += '</div>';
+  
+  html += '<div class="card-glass p-12">';
+  html += '<div class="flex-between">';
+  html += '<span class="text-muted">ต้นทุนต่อหน่วย</span>';
+  html += '<span id="displayUnitCost" class="fw-600">฿0.00</span>';
+  html += '</div>';
+  html += '<div class="flex-between mt-4">';
+  html += '<span class="text-muted">ต้นทุนรวม</span>';
+  html += '<span id="displayTotalCost" class="fw-700 text-accent">฿0.00</span>';
+  html += '</div>';
   html += '</div>';
   
   var footer = '';
   footer += '<button class="btn btn-secondary" onclick="closeMForce()">ยกเลิก</button>';
-  footer += '<button class="btn btn-primary" onclick="saveRecipeIngredient()">➕ เพิ่ม</button>';
+  footer += '<button class="btn btn-primary" onclick="saveRecipeIngredient()">➕ เพิ่มวัตถุดิบ</button>';
   
   openModal('➕ เพิ่มวัตถุดิบในสูตร', html, footer);
 }
@@ -435,6 +449,90 @@ function renderFeatureLocked(featureId, featureName) {
     '<div class="empty-text text-muted">ฟีเจอร์นี้ต้องมี Pro License</div>' +
     '<button class="btn btn-primary mt-16" onclick="LicenseManager.showLicenseModal()">🔑 อัปเกรดเป็น Pro</button>' +
     '</div></div>';
+}
+
+/* อัปเดตหน่วยและต้นทุนเมื่อเลือกวัตถุดิบ */
+function updateStockUnitAndCost() {
+  var select = $('recipeIngredientStockId');
+  var selectedOption = select.options[select.selectedIndex];
+  var unit = selectedOption.getAttribute('data-unit') || '';
+  var unitCost = parseFloat(selectedOption.getAttribute('data-cost')) || 0;
+  
+  var unitInput = $('recipeIngredientUnit');
+  if (unitInput) unitInput.value = unit;
+  
+  var displayUnitCost = $('displayUnitCost');
+  if (displayUnitCost) displayUnitCost.textContent = formatMoneySign(unitCost);
+  
+  updateIngredientCost();
+}
+
+/* คำนวณต้นทุนรวมเมื่อเปลี่ยนปริมาณ */
+function updateIngredientCost() {
+  var select = $('recipeIngredientStockId');
+  var selectedOption = select.options[select.selectedIndex];
+  var unitCost = parseFloat(selectedOption.getAttribute('data-cost')) || 0;
+  var qty = parseFloat(($('recipeIngredientQty') || {}).value) || 0;
+  
+  var totalCost = unitCost * qty;
+  var displayTotalCost = $('displayTotalCost');
+  if (displayTotalCost) displayTotalCost.textContent = formatMoneySign(totalCost);
+}
+
+/* แก้ไข saveRecipeIngredient ให้ดึงข้อมูลจาก Stock */
+function saveRecipeIngredient() {
+  var select = $('recipeIngredientStockId');
+  var stockId = select.value;
+  if (!stockId) { toast('กรุณาเลือกวัตถุดิบ', 'error'); return; }
+  
+  var selectedOption = select.options[select.selectedIndex];
+  var stockName = selectedOption.text.split(' (')[0];
+  var unit = selectedOption.getAttribute('data-unit') || '';
+  var unitCost = parseFloat(selectedOption.getAttribute('data-cost')) || 0;
+  var qty = parseFloat(($('recipeIngredientQty') || {}).value) || 0;
+  
+  if (qty <= 0) { toast('กรุณาใส่ปริมาณ', 'error'); return; }
+  
+  var stockItems = ST.getStock();
+  var stockItem = findById(stockItems, stockId);
+  
+  var recipe = ST.getRecipe(RECIPE_VIEW.selectedMenuId, RECIPE_VIEW.selectedSize);
+  if (!recipe) {
+    recipe = {
+      menuId: RECIPE_VIEW.selectedMenuId,
+      size: RECIPE_VIEW.selectedSize,
+      ingredients: []
+    };
+  }
+  
+  /* ตรวจสอบว่ามีวัตถุดิบนี้อยู่แล้วหรือไม่ */
+  var existingIdx = -1;
+  for (var i = 0; i < recipe.ingredients.length; i++) {
+    if (recipe.ingredients[i].stockId === stockId) {
+      existingIdx = i;
+      break;
+    }
+  }
+  
+  var ingredient = {
+    stockId: stockId,
+    stockName: stockName,
+    qty: qty,
+    unit: unit,
+    unitCost: unitCost,
+    totalCost: unitCost * qty
+  };
+  
+  if (existingIdx !== -1) {
+    recipe.ingredients[existingIdx] = ingredient;
+  } else {
+    recipe.ingredients.push(ingredient);
+  }
+  
+  ST.setRecipe(recipe);
+  closeMForce();
+  toast('เพิ่มวัตถุดิบในสูตรแล้ว', 'success');
+  renderRecipeView();
 }
 
 console.log('[views-recipe.js] loaded');

@@ -38,59 +38,84 @@
         <span id="shopName" class="brand-name">Coffee POS</span>
       </div>
     </div>
-    <div class="top-bar-right">
-      <span id="topClock" class="top-clock"></span>
-      <span id="topStaff" class="top-staff"></span>
-      <button class="btn-icon" onclick="toggleTheme()" title="Toggle Theme">
-        <span id="themeIcon">🌙</span>
-      </button>
-      <button class="btn-icon" onclick="showSync()" title="Sync">
-        <span>🔄</span>
-      </button>
-      <button class="btn-icon" onclick="nav('admin')" title="Settings">
-        <span>⚙️</span>
-      </button>
-    </div>
+<div class="top-bar-right">
+  <span id="topClock" class="top-clock"></span>
+  <span id="topStaff" class="top-staff" onclick="if(APP.currentStaff) showStaffMenu()" style="cursor:pointer;"></span>
+  <button id="logoutBtn" class="btn-icon" onclick="logoutStaff()" style="display:none;">
+    <span>🚪</span>
+  </button>
+  <button id="loginBtn" class="btn-icon" onclick="showPinLogin()" style="display:;">
+    <span>🔐</span>
+  </button>
+  <button class="btn-icon" onclick="toggleTheme()" title="Toggle Theme">
+    <span id="themeIcon">🌙</span>
+  </button>
+  <button class="btn-icon" onclick="showSync()" title="Sync">
+    <span>🔄</span>
+  </button>
+  <button class="btn-icon" onclick="nav('admin')" title="Settings">
+    <span>⚙️</span>
+  </button>
+</div>
   </header>
 
   <!-- === LAYOUT: SIDEBAR + MAIN === -->
   <div class="layout">
 
     <!-- SIDEBAR (PC) -->
-    <nav id="sidebar" class="sidebar">
-      <div class="sidebar-menu">
-        <button class="nav-item active" data-view="pos" onclick="nav('pos')">
-          <span class="nav-icon">🛒</span>
-          <span class="nav-label">POS</span>
+   <nav id="sidebar" class="sidebar">
+  <div class="sidebar-menu">
+    <button class="nav-item active" data-view="pos" onclick="nav('pos')">
+      <span class="nav-icon">🛒</span>
+      <span class="nav-label">POS</span>
+    </button>
+    <button class="nav-item" data-view="menu" onclick="nav('menu')">
+      <span class="nav-icon">📋</span>
+      <span class="nav-label">เมนู</span>
+    </button>
+    <button class="nav-item" data-view="orders" onclick="nav('orders')">
+      <span class="nav-icon">📜</span>
+      <span class="nav-label">ออเดอร์</span>
+    </button>
+    <button class="nav-item" data-view="report" onclick="nav('report')">
+      <span class="nav-icon">📊</span>
+      <span class="nav-label">รายงาน</span>
+    </button>
+    <button class="nav-item" data-view="stock" onclick="nav('stock')">
+      <span class="nav-icon">📦</span>
+      <span class="nav-label">Stock</span>
+    </button>
+    
+    <!-- NEW: Staff -->
+    <button class="nav-item" data-view="staff" onclick="nav('staff')">
+      <span class="nav-icon">👥</span>
+      <span class="nav-label">พนักงาน</span>
+    </button>
+    
+    <!-- NEW: Members (Pro) -->
+    <button class="nav-item" data-view="members" onclick="nav('members')" id="navMembers" style="display:none;">
+  <span class="nav-icon">👤</span>
+  <span class="nav-label">สมาชิก</span>
         </button>
-        <button class="nav-item" data-view="menu" onclick="nav('menu')">
-          <span class="nav-icon">📋</span>
-          <span class="nav-label">เมนู</span>
+    
+    <!-- NEW: Recipe (Pro) -->
+    <button class="nav-item" data-view="recipe" onclick="nav('recipe')" id="navRecipe" style="display:none;">
+  <span class="nav-icon">🧪</span>
+  <span class="nav-label">สูตรวัตถุดิบ</span>
         </button>
-        <button class="nav-item" data-view="orders" onclick="nav('orders')">
-          <span class="nav-icon">📜</span>
-          <span class="nav-label">ออเดอร์</span>
-        </button>
-        <button class="nav-item" data-view="report" onclick="nav('report')">
-          <span class="nav-icon">📊</span>
-          <span class="nav-label">รายงาน</span>
-        </button>
-        <button class="nav-item" data-view="stock" onclick="nav('stock')">
-          <span class="nav-icon">📦</span>
-          <span class="nav-label">Stock</span>
-        </button>
-        <button class="nav-item" data-view="admin" onclick="nav('admin')">
-          <span class="nav-icon">⚙️</span>
-          <span class="nav-label">ตั้งค่า</span>
-        </button>
-      </div>
-      <div class="sidebar-footer">
-        <div id="sidebarUser" class="sidebar-user"></div>
-        <button id="btnAuth" class="btn-sm btn-outline" onclick="handleAuth()">
-          <span>🔐</span> <span id="authLabel">Login</span>
-        </button>
-      </div>
-    </nav>
+    
+    <button class="nav-item" data-view="admin" onclick="nav('admin')">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-label">ตั้งค่า</span>
+    </button>
+  </div>
+  <div class="sidebar-footer">
+    <div id="sidebarUser" class="sidebar-user"></div>
+    <button id="btnAuth" class="btn-sm btn-outline" onclick="handleAuth()">
+      <span>🔐</span> <span id="authLabel">Login</span>
+    </button>
+  </div>
+</nav>
 
     <!-- SIDEBAR OVERLAY (Mobile) -->
     <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
@@ -104,27 +129,35 @@
 
   <!-- === BOTTOM NAV (Mobile) === -->
   <nav id="bottomNav" class="bottom-nav">
-    <button class="bnav-item active" data-view="pos" onclick="nav('pos')">
-      <span class="bnav-icon">🛒</span>
-      <span class="bnav-label">POS</span>
-    </button>
-    <button class="bnav-item" data-view="menu" onclick="nav('menu')">
-      <span class="bnav-icon">📋</span>
-      <span class="bnav-label">เมนู</span>
-    </button>
-    <button class="bnav-item" data-view="orders" onclick="nav('orders')">
-      <span class="bnav-icon">📜</span>
-      <span class="bnav-label">ออเดอร์</span>
-    </button>
-    <button class="bnav-item" data-view="report" onclick="nav('report')">
-      <span class="bnav-icon">📊</span>
-      <span class="bnav-label">รายงาน</span>
-    </button>
-    <button class="bnav-item" data-view="admin" onclick="nav('admin')">
-      <span class="bnav-icon">⚙️</span>
-      <span class="bnav-label">เพิ่มเติม</span>
-    </button>
-  </nav>
+  <button class="bnav-item active" data-view="pos" onclick="nav('pos')">
+    <span class="bnav-icon">🛒</span>
+    <span class="bnav-label">POS</span>
+  </button>
+  <button class="bnav-item" data-view="menu" onclick="nav('menu')">
+    <span class="bnav-icon">📋</span>
+    <span class="bnav-label">เมนู</span>
+  </button>
+  <button class="bnav-item" data-view="orders" onclick="nav('orders')">
+    <span class="bnav-icon">📜</span>
+    <span class="bnav-label">ออเดอร์</span>
+  </button>
+  <button class="bnav-item" data-view="report" onclick="nav('report')">
+    <span class="bnav-icon">📊</span>
+    <span class="bnav-label">รายงาน</span>
+  </button>
+  <button class="bnav-item" data-view="stock" onclick="nav('stock')">
+    <span class="bnav-icon">📦</span>
+    <span class="bnav-label">Stock</span>
+  </button>
+  <button class="bnav-item" data-view="staff" onclick="nav('staff')">
+    <span class="bnav-icon">👥</span>
+    <span class="bnav-label">พนักงาน</span>
+  </button>
+  <button class="bnav-item" data-view="admin" onclick="nav('admin')">
+    <span class="bnav-icon">⚙️</span>
+    <span class="bnav-label">เพิ่มเติม</span>
+  </button>
+</nav>
 
 </div>
 

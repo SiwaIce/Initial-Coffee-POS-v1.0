@@ -2099,3 +2099,85 @@ input:focus, select:focus, textarea:focus {
     flex-direction: column;
   }
 }
+/* Sidebar hidden state (desktop) */
+.sidebar.hidden {
+  display: none;
+}
+
+.main-content.sidebar-hidden {
+  margin-left: 0;
+  width: 100%;
+}
+
+/* เมื่อ sidebar ถูกซ่อน ให้ pos-menu ขยายเต็ม */
+.sidebar.hidden + .main-content .pos-menu,
+.main-content.sidebar-hidden .pos-menu {
+  width: 100%;
+}
+
+/* Desktop default */
+@media (min-width: 769px) {
+  .sidebar {
+    display: flex;
+    transition: all 0.3s ease;
+  }
+  .main-content {
+    transition: all 0.3s ease;
+  }
+}
+/* เพิ่มฟอนต์ภาษาไทย */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@100..900&display=swap');
+
+:root {
+  --font: 'Noto Sans Thai', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Pricing Card Hover Effect */
+.pricing-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.pricing-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Feature item hover */
+.feature-item {
+  transition: all 0.2s ease;
+}
+
+.feature-item:hover {
+  transform: translateX(4px);
+}
+
+/* Button styles */
+.btn-block {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.btn-accent {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  border: none;
+}
+
+.btn-accent:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .pricing-grid {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+  }
+  
+  .pricing-card {
+    max-width: 400px;
+    margin: 0 auto;
+  }
+}

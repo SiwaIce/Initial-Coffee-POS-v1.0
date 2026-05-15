@@ -23,11 +23,19 @@ function renderAdminView() {
   html += '<div class="section-title">⚙️ ตั้งค่า</div>';
   html += '</div>';
 
-  html += '<div class="cat-tabs mb-16">';
+  html += '<div class="cat-tabs mb-16" id="adminTabs">';
   html += admSubTab('shop', '🏪 ร้านค้า');
   html += admSubTab('staff', '👥 พนักงาน');
-  html += admSubTab('members', '👤 สมาชิก');
-  html += admSubTab('recipe', '🧪 สูตรวัตถุดิบ');  // NEW - Pro feature
+  
+  /* แสดงเฉพาะเมื่อเปิดฟีเจอร์ */
+  if (FeatureManager.isEnabled('pro_members')) {
+    html += admSubTab('members', '👤 สมาชิก');
+  }
+  
+  if (FeatureManager.isEnabled('pro_recipe')) {
+    html += admSubTab('recipe', '🧪 สูตรวัตถุดิบ');
+  }
+  
   html += admSubTab('data', '💾 ข้อมูล');
   html += admSubTab('license', '🔑 License');
   html += admSubTab('about', 'ℹ️ เกี่ยวกับ');
@@ -83,12 +91,13 @@ function renderAdmContent() {
 }
 // เพิ่มฟังก์ชันใหม่
 function renderLicenseTab() {
-  var licenseTier = LicenseManager ? LicenseManager.getTier() : 'standard';
+  var licenseTier = LicenseManager ? LicenseManager.getTier() : 'free';
   var licenseKey = LicenseManager ? LicenseManager.getCurrentKey() : null;
   var daysLeft = LicenseManager ? LicenseManager.getTrialDaysLeft() : 0;
   
   var html = '';
   
+  /* Status Card */
   html += '<div class="card mb-16">';
   html += '<div class="card-header">';
   html += '<div class="card-title">🔑 สถานะ License</div>';
@@ -98,13 +107,13 @@ function renderLicenseTab() {
   html += '<div style="font-size:64px;">';
   if (licenseTier === 'pro') html += '⭐';
   else if (licenseTier === 'trial') html += '🧪';
-  else html += '📦';
+  else html += '🆓';
   html += '</div>';
   
   html += '<div class="fw-800 fs-xl mt-4">';
   if (licenseTier === 'pro') html += 'Pro Edition';
-  else if (licenseTier === 'trial') html += 'Trial Mode';
-  else html += 'Standard Edition (Free)';
+  else if (licenseTier === 'trial') html += 'Trial Mode (30 วัน)';
+  else html += 'Free Edition';
   html += '</div>';
   
   if (licenseKey) {
@@ -118,7 +127,106 @@ function renderLicenseTab() {
   html += '</div>';
   html += '</div>';
   
-  /* Feature comparison table */
+  /* ===== Pricing Table (สวยงาม เข้ากับธีม) ===== */
+html += '<div class="card mb-16">';
+html += '<div class="card-header">';
+html += '<div class="card-title">💰 แผนราคา</div>';
+html += '<div class="text-muted fs-sm">*ราคายังไม่ระบุ (ติดต่อสอบถาม)</div>';
+html += '</div>';
+
+html += '<div class="pricing-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:8px;">';
+
+/* Free */
+html += '<div class="pricing-card" style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:all var(--transition);">';
+html += '<div class="pricing-header" style="padding:20px 16px;text-align:center;border-bottom:1px solid var(--border);">';
+html += '<div class="pricing-icon" style="font-size:40px;">🆓</div>';
+html += '<div class="pricing-tier" style="font-size:20px;font-weight:800;margin-top:8px;">Free</div>';
+html += '<div class="pricing-price" style="font-size:28px;font-weight:800;color:var(--success);margin-top:8px;">ฟรี</div>';
+html += '<div class="pricing-period" style="font-size:12px;color:var(--text-muted);">ตลอดชีพ</div>';
+html += '</div>';
+html += '<div class="pricing-body" style="padding:16px;">';
+html += '<div class="pricing-features" style="display:flex;flex-direction:column;gap:10px;">';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>POS ขายหน้าร้าน</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>จัดการเมนู</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>ประวัติออเดอร์</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;opacity:0.5;"><span style="color:var(--danger);">❌</span><span>Stock วัตถุดิบ</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;opacity:0.5;"><span style="color:var(--danger);">❌</span><span>ระบบพนักงาน</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;opacity:0.5;"><span style="color:var(--danger);">❌</span><span>รายงานขั้นสูง</span></div>';
+html += '</div>';
+html += '</div>';
+html += '<div class="pricing-footer" style="padding:16px;border-top:1px solid var(--border);">';
+if (licenseTier === 'free') {
+  html += '<button class="btn btn-success btn-block" style="width:100%;" disabled>กำลังใช้งาน</button>';
+} else {
+  html += '<button class="btn btn-outline btn-block" style="width:100%;" onclick="alert(\'ฟรี ใช้งานได้เลย\')">เริ่มต้นใช้งาน</button>';
+}
+html += '</div>';
+html += '</div>';
+
+/* Standard */
+html += '<div class="pricing-card" style="background:var(--bg-card);border:2px solid var(--info);border-radius:var(--radius);overflow:hidden;transition:all var(--transition);position:relative;">';
+html += '<div class="pricing-badge" style="position:absolute;top:12px;right:12px;background:var(--info);color:#fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;">แนะนำ</div>';
+html += '<div class="pricing-header" style="padding:20px 16px;text-align:center;border-bottom:1px solid var(--border);">';
+html += '<div class="pricing-icon" style="font-size:40px;">📦</div>';
+html += '<div class="pricing-tier" style="font-size:20px;font-weight:800;margin-top:8px;">Standard</div>';
+html += '<div class="pricing-price" style="font-size:28px;font-weight:800;color:var(--info);margin-top:8px;">--</div>';
+html += '<div class="pricing-period" style="font-size:12px;color:var(--text-muted);">บาท / ครั้งเดียว</div>';
+html += '</div>';
+html += '<div class="pricing-body" style="padding:16px;">';
+html += '<div class="pricing-features" style="display:flex;flex-direction:column;gap:10px;">';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>ทุกอย่างใน Free</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>Stock วัตถุดิบ</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>ระบบพนักงาน</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>LINE Notify</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>PromptPay QR</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;opacity:0.5;"><span style="color:var(--danger);">❌</span><span>สมาชิก + แต้ม</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;opacity:0.5;"><span style="color:var(--danger);">❌</span><span>Recipe + Auto Stock</span></div>';
+html += '</div>';
+html += '</div>';
+html += '<div class="pricing-footer" style="padding:16px;border-top:1px solid var(--border);">';
+if (licenseTier === 'standard') {
+  html += '<button class="btn btn-info btn-block" style="width:100%;" disabled>กำลังใช้งาน</button>';
+} else {
+  html += '<button class="btn btn-outline btn-block" style="width:100%;" onclick="LicenseManager.showLicenseModal()">อัปเกรด</button>';
+}
+html += '</div>';
+html += '</div>';
+
+/* Pro */
+html += '<div class="pricing-card" style="background:linear-gradient(135deg,var(--bg-card),rgba(249,115,22,0.05));border:2px solid var(--accent);border-radius:var(--radius);overflow:hidden;transition:all var(--transition);">';
+html += '<div class="pricing-header" style="padding:20px 16px;text-align:center;border-bottom:1px solid var(--border);">';
+html += '<div class="pricing-icon" style="font-size:40px;">⭐</div>';
+html += '<div class="pricing-tier" style="font-size:20px;font-weight:800;margin-top:8px;color:var(--accent);">Pro</div>';
+html += '<div class="pricing-price" style="font-size:28px;font-weight:800;color:var(--accent);margin-top:8px;">--</div>';
+html += '<div class="pricing-period" style="font-size:12px;color:var(--text-muted);">บาท / ปี</div>';
+html += '</div>';
+html += '<div class="pricing-body" style="padding:16px;">';
+html += '<div class="pricing-features" style="display:flex;flex-direction:column;gap:10px;">';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>ทุกอย่างใน Standard</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>สมาชิก + แต้มสะสม</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>Recipe + ต้นทุน</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>Auto ตัด Stock</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>Kitchen Display</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>Real-time Dashboard</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>รายงานขั้นสูง (COGS)</span></div>';
+html += '<div class="feature-item" style="display:flex;align-items:center;gap:8px;"><span style="color:var(--success);">✅</span><span>รูปเมนู</span></div>';
+html += '</div>';
+html += '</div>';
+html += '<div class="pricing-footer" style="padding:16px;border-top:1px solid var(--border);">';
+if (licenseTier === 'pro') {
+  html += '<button class="btn btn-accent btn-block" style="width:100%;background:var(--accent);color:#fff;" disabled>กำลังใช้งาน</button>';
+} else if (licenseTier === 'trial') {
+  html += '<button class="btn btn-warning btn-block" style="width:100%;" disabled>กำลังทดลองใช้</button>';
+} else {
+  html += '<button class="btn btn-primary btn-block" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));" onclick="LicenseManager.showLicenseModal()">อัปเกรดเป็น Pro</button>';
+}
+html += '</div>';
+html += '</div>';
+
+html += '</div>';
+html += '</div>';
+  
+  /* Feature comparison table (existing) */
   html += '<div class="card mb-16">';
   html += '<div class="card-header">';
   html += '<div class="card-title">📋 เปรียบเทียบฟีเจอร์</div>';
@@ -127,30 +235,37 @@ function renderLicenseTab() {
   html += '<div class="table-wrap">';
   html += '<table>';
   html += '<thead>';
-  html += '<tr><th>ฟีเจอร์</th><th class="text-center">Standard</th><th class="text-center">Pro</th></tr>';
+  html += '<tr><th>ฟีเจอร์</th><th class="text-center">Free</th><th class="text-center">Standard</th><th class="text-center">Pro</th></tr>';
   html += '</thead>';
   html += '<tbody>';
   
   var compareFeatures = [
-    { name: '📦 Stock วัตถุดิบ', std: '✅', pro: '✅' },
-    { name: '👥 ระบบพนักงาน', std: '✅', pro: '✅' },
-    { name: '📷 PromptPay QR', std: '✅', pro: '✅' },
-    { name: '💬 LINE Notify', std: '⚠️', pro: '✅' },
-    { name: '👤 สมาชิก + แต้ม', std: '❌', pro: '✅' },
-    { name: '🧪 Recipe + COGS', std: '❌', pro: '✅' },
-    { name: '⚡ Auto ตัด Stock', std: '❌', pro: '✅' },
-    { name: '🍳 Kitchen Display', std: '❌', pro: '✅' },
-    { name: '🔄 Real-time Dashboard', std: '❌', pro: '✅' },
-    { name: '📈 รายงานขั้นสูง', std: '❌', pro: '✅' }
+    { name: '🛒 POS ขายหน้าร้าน', free: '✅', std: '✅', pro: '✅' },
+    { name: '📋 จัดการเมนู', free: '✅', std: '✅', pro: '✅' },
+    { name: '📜 ประวัติออเดอร์', free: '✅', std: '✅', pro: '✅' },
+    { name: '📦 Stock วัตถุดิบ', free: '❌', std: '✅', pro: '✅' },
+    { name: '👥 ระบบพนักงาน', free: '❌', std: '✅', pro: '✅' },
+    { name: '📊 รายงานพื้นฐาน', free: '✅', std: '✅', pro: '✅' },
+    { name: '💬 LINE Notify', free: '❌', std: '✅', pro: '✅' },
+    { name: '📷 PromptPay QR', free: '❌', std: '✅', pro: '✅' },
+    { name: '👤 สมาชิก + แต้ม', free: '❌', std: '❌', pro: '✅' },
+    { name: '🧪 Recipe + COGS', free: '❌', std: '❌', pro: '✅' },
+    { name: '⚡ Auto ตัด Stock', free: '❌', std: '❌', pro: '✅' },
+    { name: '🍳 Kitchen Display', free: '❌', std: '❌', pro: '✅' },
+    { name: '🔄 Real-time Dashboard', free: '❌', std: '❌', pro: '✅' },
+    { name: '📈 รายงานขั้นสูง', free: '❌', std: '❌', pro: '✅' },
+    { name: '🖼️ รูปเมนู', free: '❌', std: '❌', pro: '✅' }
   ];
   
   for (var i = 0; i < compareFeatures.length; i++) {
     var f = compareFeatures[i];
-    var stdClass = f.std === '✅' ? 'text-success' : (f.std === '⚠️' ? 'text-warning' : 'text-danger');
+    var freeClass = f.free === '✅' ? 'text-success' : 'text-danger';
+    var stdClass = f.std === '✅' ? 'text-success' : 'text-danger';
     var proClass = f.pro === '✅' ? 'text-success' : 'text-danger';
     
     html += '<tr>';
     html += '<td class="fw-600">' + f.name + '</td>';
+    html += '<td class="text-center ' + freeClass + '">' + f.free + '</td>';
     html += '<td class="text-center ' + stdClass + '">' + f.std + '</td>';
     html += '<td class="text-center ' + proClass + '">' + f.pro + '</td>';
     html += '</tr>';
@@ -200,26 +315,6 @@ function renderShopSettings() {
   html += '<input type="text" id="cfgOrderPrefix" value="' + sanitize(cfg.orderPrefix || '#') + '" placeholder="#" style="width:80px;">';
   html += '</div>';
   html += '</div>';
-
-  /* Feature Toggle */
-  html += '<div style="border-top:1px solid var(--border);margin:14px 0;"></div>';
-  html += '<div class="fw-600 mb-8">📌 แสดงเมนู</div>';
-
-  html += '<div class="form-group">';
-  html += '<label class="toggle-wrap" onclick="toggleToggle(this)">';
-  html += '<div class="toggle' + (cfg.showStock !== false ? ' on' : '') + '" id="cfgShowStock"></div>';
-  html += '<span>📦 Stock วัตถุดิบ</span>';
-  html += '</label>';
-  html += '</div>';
-
-  html += '<div class="form-group">';
-  html += '<label class="toggle-wrap" onclick="toggleToggle(this)">';
-  html += '<div class="toggle' + (cfg.showStaff !== false ? ' on' : '') + '" id="cfgShowStaff"></div>';
-  html += '<span>👥 พนักงาน / PIN Login</span>';
-  html += '</label>';
-  html += '</div>';
-
-  html += '</div>'; /* end shop info card */
 
   /* === VAT / SC === */
   html += '<div class="card mb-16">';
@@ -492,11 +587,7 @@ function saveShopSettings() {
   cfg.shopName = ($('cfgShopName') || {}).value || 'Coffee POS';
   cfg.currency = ($('cfgCurrency') || {}).value || '฿';
   cfg.orderPrefix = ($('cfgOrderPrefix') || {}).value || '#';
-
-  /* Feature toggles */
-  cfg.showStock = hasClass($('cfgShowStock'), 'on');
-  cfg.showStaff = hasClass($('cfgShowStaff'), 'on');
-
+ 
   /* VAT / SC */
   cfg.vatEnabled = hasClass($('cfgVatEnabled'), 'on');
   cfg.vatRate = parseFloat(($('cfgVatRate') || {}).value) || 7;
@@ -685,6 +776,21 @@ function renderStaffSettings() {
     html += '</div>';
   }
 
+function renderStaffView() {
+  /* Reuse staff settings from admin */
+  var main = $('mainContent');
+  if (!main) return;
+  
+  var html = '<div class="page-pad anim-fadeUp">';
+  html += '<div class="section-header">';
+  html += '<div class="section-title">👥 จัดการพนักงาน</div>';
+  html += '</div>';
+  html += renderStaffSettings();
+  html += '</div>';
+  
+  main.innerHTML = html;
+}
+
   /* Current staff */
   html += '<div class="card mt-16">';
   html += '<div class="card-header"><div class="card-title">👤 พนักงานปัจจุบัน</div></div>';
@@ -766,6 +872,7 @@ function renderStaffCard(staff, allShifts) {
 
   html += '<div class="flex gap-6 mt-8" style="border-top:1px solid var(--border);padding-top:8px;">';
   html += '<button class="btn btn-secondary btn-sm" onclick="modalEditStaff(findById(ST.getStaff(),\'' + sanitize(staff.id) + '\'))">✏️</button>';
+  html += '<button class="btn btn-info btn-sm" onclick="showStaffWorkHistory(\'' + sanitize(staff.id) + '\')">📋 ประวัติงาน</button>';  // NEW
   if (isActive) {
     if (activeShift) {
       html += '<button class="btn btn-warning btn-sm" onclick="doClockOut(\'' + sanitize(staff.id) + '\',\'' + sanitize(activeShift.id) + '\')">🕐 Out</button>';
@@ -819,14 +926,26 @@ function doClockIn(staffId) {
   ST.clockIn(staffId);
   var staff = findById(ST.getStaff(), staffId);
   toast((staff ? staff.name : '') + ' Clock In', 'success');
-  renderAdminView();
+  
+  /* redirect ไปหน้า staff */
+  if (typeof renderStaffView === 'function') {
+    renderStaffView();
+  } else {
+    nav('staff');
+  }
 }
 
 function doClockOut(staffId, shiftId) {
   ST.clockOut(shiftId);
   var staff = findById(ST.getStaff(), staffId);
   toast((staff ? staff.name : '') + ' Clock Out', 'info');
-  renderAdminView();
+  
+  /* redirect ไปหน้า staff */
+  if (typeof renderStaffView === 'function') {
+    renderStaffView();
+  } else {
+    nav('staff');
+  }
 }
 
 /* ============================================
@@ -896,16 +1015,38 @@ function pinSubmit() {
   var staff = ST.verifyPin(pin);
   if (staff) {
     APP.currentStaff = staff;
+    
+    /* ===== บันทึก session ลง localStorage ===== */
+    ST.setObj('current_session', {
+      staffId: staff.id,
+      loginTime: Date.now(),
+      staffName: staff.name,
+      role: staff.role
+    });
+    
     setText('topStaff', '👤 ' + staff.name);
+    
+    var logoutBtn = $('#logoutBtn');
+    if (logoutBtn) logoutBtn.style.display = '';
+    
+    var loginBtn = $('#loginBtn');
+    if (loginBtn) loginBtn.style.display = 'none';
+    
     closeMForce();
     toast('ยินดีต้อนรับ ' + staff.name, 'success');
     if (typeof playSound === 'function') playSound('success');
+    
     var activeShift = ST.getActiveShift(staff.id);
     if (!activeShift) {
       ST.clockIn(staff.id);
       toast(staff.name + ' Clock In', 'info', 2000);
     }
-    if (APP.currentView === 'admin') renderAdminView();
+    
+    if (typeof updateSidebarByStaffPermission === 'function') {
+      updateSidebarByStaffPermission();
+    }
+    
+    nav('pos');
   } else {
     setText('pinError', '❌ PIN ไม่ถูกต้อง');
     el.value = '';
@@ -917,15 +1058,54 @@ function pinSubmit() {
 
 function logoutStaff() {
   if (!APP.currentStaff) return;
+  
   confirmDialog('ออกจากระบบ ' + APP.currentStaff.name + '?', function() {
     var activeShift = ST.getActiveShift(APP.currentStaff.id);
     if (activeShift) ST.clockOut(activeShift.id);
     var name = APP.currentStaff.name;
     APP.currentStaff = null;
-    setText('topStaff', '');
+    
+    /* ===== ล้าง session ===== */
+    ST.remove('current_session');
+    
+    updateLoginUI();
+    updateSidebarByStaffPermission();
+    
+    nav('pos');
+    
+    if (typeof renderPOSView === 'function') {
+      renderPOSView();
+    }
+    
     toast(name + ' ออกจากระบบแล้ว', 'info');
-    if (APP.currentView === 'admin') renderAdminView();
   });
+}
+
+/* ============================================
+   UPDATE UI BASED ON LOGIN STATUS
+   ============================================ */
+function updateLoginUI() {
+  var isLoggedIn = !!APP.currentStaff;
+  var loginBtn = $('#loginBtn');
+  var logoutBtn = $('#logoutBtn');
+  var topStaff = $('#topStaff');
+  
+  if (isLoggedIn) {
+    if (loginBtn) loginBtn.style.display = 'none';
+    if (logoutBtn) logoutBtn.style.display = '';
+    if (topStaff) {
+      topStaff.textContent = '👤 ' + APP.currentStaff.name;
+      topStaff.style.display = '';
+      topStaff.title = 'คลิกเพื่อดูบัญชี';
+    }
+  } else {
+    if (loginBtn) loginBtn.style.display = '';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    if (topStaff) {
+      topStaff.textContent = '';
+      topStaff.style.display = 'none';
+    }
+  }
 }
 
 /* ============================================
@@ -1262,6 +1442,12 @@ function copyDailySummary() {
   css += '.staff-grid{grid-template-columns:1fr;}';
   css += '}';
 
+  /* Work History CSS */
+css += '.work-stat-card{transition:all var(--transition);}';
+css += '.work-stat-card:hover{transform:translateY(-3px);border-color:var(--accent);}';
+css += '.chart-bars{overflow-x:auto;padding-bottom:4px;}';
+css += '.work-chart{overflow-x:auto;}';
+
   var style = document.createElement('style');
   style.id = styleId;
   style.textContent = css;
@@ -1313,6 +1499,196 @@ function openKitchenDisplayFromAdmin() {
     window.open(kitchenUrl, '_blank', 'width=1024,height=768');
   }
   toast('กำลังเปิด Kitchen Display...', 'info');
+}
+
+/* ============================================
+   STAFF WORK HISTORY MODAL
+   ============================================ */
+
+function showStaffWorkHistory(staffId) {
+  var staff = findById(ST.getStaff(), staffId);
+  if (!staff) return;
+  
+  var now = new Date();
+  var currentMonth = now.getMonth();
+  var currentYear = now.getFullYear();
+  var selectedMonth = currentMonth;
+  var selectedYear = currentYear;
+  
+  renderWorkHistoryModal(staff, selectedMonth, selectedYear);
+}
+
+function renderWorkHistoryModal(staff, month, year) {
+  var shifts = ST.getShiftsByStaffAndMonth(staff.id, month, year);
+  var details = ST.getStaffWorkDetails(staff.id, month, year);
+  var performance = ST.getStaffPerformance(staff.id, month, year);
+  var totalHours = ST.getStaffWorkHours(staff.id, month, year);
+  
+  var monthNames = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+                    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+  
+  var html = '';
+  
+  /* Header */
+  html += '<div class="text-center mb-20">';
+  html += '<div class="staff-work-avatar" style="width:70px;height:70px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">';
+  html += '<span style="font-size:32px;">👤</span>';
+  html += '</div>';
+  html += '<div class="fw-800 fs-xl">' + sanitize(staff.name) + '</div>';
+  html += '<div class="text-muted">' + getRoleName(staff.role) + ' · ' + performance.rating + '</div>';
+  html += '</div>';
+  
+  /* Performance KPI Cards */
+  html += '<div class="work-stats-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">';
+  html += '<div class="work-stat-card" style="background:var(--bg-card);border-radius:var(--radius);padding:12px;text-align:center;">';
+  html += '<div class="work-stat-value" style="font-size:24px;font-weight:800;color:var(--accent);">' + performance.totalDays + '</div>';
+  html += '<div class="work-stat-label" style="font-size:11px;color:var(--text-muted);">วันทำงาน</div>';
+  html += '</div>';
+  html += '<div class="work-stat-card" style="background:var(--bg-card);border-radius:var(--radius);padding:12px;text-align:center;">';
+  html += '<div class="work-stat-value" style="font-size:24px;font-weight:800;color:var(--accent2);">' + performance.totalHours + '</div>';
+  html += '<div class="work-stat-label" style="font-size:11px;color:var(--text-muted);">ชั่วโมงทำงาน</div>';
+  html += '</div>';
+  html += '<div class="work-stat-card" style="background:var(--bg-card);border-radius:var(--radius);padding:12px;text-align:center;">';
+  html += '<div class="work-stat-value" style="font-size:24px;font-weight:800;color:var(--success);">' + formatMoneySign(performance.totalSales) + '</div>';
+  html += '<div class="work-stat-label" style="font-size:11px;color:var(--text-muted);">ยอดขายรวม</div>';
+  html += '</div>';
+  html += '<div class="work-stat-card" style="background:var(--bg-card);border-radius:var(--radius);padding:12px;text-align:center;">';
+  html += '<div class="work-stat-value" style="font-size:24px;font-weight:800;color:var(--warning);">' + formatMoneySign(performance.avgSalesPerHour) + '</div>';
+  html += '<div class="work-stat-label" style="font-size:11px;color:var(--text-muted);">รายได้/ชม.</div>';
+  html += '</div>';
+  html += '</div>';
+  
+  /* Month Selector */
+  html += '<div class="flex-between mb-16" style="flex-wrap:wrap;gap:10px;">';
+  html += '<div class="flex gap-8">';
+  html += '<button class="btn btn-secondary btn-sm" onclick="changeWorkHistoryMonth(\'' + staff.id + '\', ' + (month - 1) + ', ' + year + ')">◀ ' + (month === 0 ? monthNames[11] : monthNames[month-1]) + '</button>';
+  html += '<span class="fw-700" style="padding:6px 16px;background:var(--bg-card);border-radius:20px;">' + monthNames[month] + ' ' + (year + 543) + '</span>';
+  html += '<button class="btn btn-secondary btn-sm" onclick="changeWorkHistoryMonth(\'' + staff.id + '\', ' + (month + 1) + ', ' + year + ')">' + (month === 11 ? monthNames[0] : monthNames[month+1]) + ' ▶</button>';
+  html += '</div>';
+  html += '<button class="btn btn-sm btn-outline" onclick="exportStaffWorkHistory(\'' + staff.id + '\', ' + month + ', ' + year + ')">📥 Export CSV</button>';
+  html += '</div>';
+  
+  /* Summary bar for this month */
+  html += '<div class="card-glass p-16 mb-20" style="background:linear-gradient(135deg,var(--accent-glow),transparent);">';
+  html += '<div class="flex-between flex-wrap gap-12">';
+  html += '<div><span class="text-muted fs-sm">📅 ชั่วโมงทำงาน ' + monthNames[month] + '</span><div class="fw-800 fs-xl" style="color:var(--accent);">' + totalHours + ' ชม.</div></div>';
+  html += '<div><span class="text-muted fs-sm">💰 ยอดขายเดือนนี้</span><div class="fw-800 fs-xl text-success">' + formatMoneySign(performance.totalSales) + '</div></div>';
+  html += '<div><span class="text-muted fs-sm">📊 เฉลี่ย/วัน</span><div class="fw-800">' + formatMoneySign(performance.avgSalesPerDay) + '</div></div>';
+  html += '<div><span class="text-muted fs-sm">⭐ คะแนน</span><div class="fw-800">' + performance.rating + '</div></div>';
+  html += '</div>';
+  html += '</div>';
+  
+  /* Daily Work Chart */
+  if (details.length > 0) {
+    var maxHours = 12;
+    html += '<div class="work-chart mb-20" style="background:var(--bg-card);border-radius:var(--radius);padding:16px;">';
+    html += '<div class="fw-600 mb-12">📊 ชั่วโมงทำงานรายวัน</div>';
+    html += '<div class="chart-bars" style="display:flex;gap:6px;align-items:flex-end;min-height:120px;">';
+    
+    for (var i = 0; i < details.length && i < 31; i++) {
+      var d = details[i];
+      var barHeight = Math.min(80, (d.hours / maxHours) * 80);
+      var dayNum = d.date.split('/')[0];
+      var isActive = d.isActive;
+      
+      html += '<div style="flex:1;text-align:center;">';
+      html += '<div style="height:90px;display:flex;flex-direction:column;justify-content:flex-end;">';
+      html += '<div style="height:' + barHeight + 'px;background:linear-gradient(180deg,var(--accent),var(--accent2));border-radius:4px 4px 0 0;width:100%;" title="' + d.hours + ' ชั่วโมง"></div>';
+      html += '</div>';
+      html += '<div class="fs-sm mt-4" style="color:' + (isActive ? 'var(--warning)' : 'var(--text-muted)') + ';">' + dayNum + '</div>';
+      html += '</div>';
+    }
+    
+    html += '</div>';
+    html += '</div>';
+  }
+  
+  /* Detailed Table */
+  if (details.length === 0) {
+    html += '<div class="empty-state">';
+    html += '<div class="empty-icon">📋</div>';
+    html += '<div class="empty-text">ไม่มีประวัติการทำงานในเดือนนี้</div>';
+    html += '</div>';
+  } else {
+    html += '<div class="table-wrap" style="max-height:400px;overflow-y:auto;">';
+    html += '<table>';
+    html += '<thead style="position:sticky;top:0;background:var(--bg-card);">';
+    html += '<tr><th>วันที่</th><th>เวลาเข้า</th><th>เวลาออก</th><th class="text-right">ชั่วโมง</th><th class="text-right">ออเดอร์</th><th class="text-right">ยอดขาย</th><th class="text-right">รายได้/ชม.</th><th class="text-center">สถานะ</th></tr>';
+    html += '</thead>';
+    html += '<tbody>';
+    
+    for (var i = 0; i < details.length; i++) {
+      var d = details[i];
+      var hoursColor = d.hours >= 8 ? 'text-success' : (d.hours >= 4 ? 'text-warning' : 'text-danger');
+      var statusText = d.isActive ? '🟢 กำลังทำงาน' : (d.hours >= 8 ? '✅ ครบ' : (d.hours >= 4 ? '🟡 ปกติ' : '🔴 ไม่ครบ'));
+      var statusColor = d.isActive ? 'text-warning' : (d.hours >= 8 ? 'text-success' : (d.hours >= 4 ? 'text-info' : 'text-danger'));
+      
+      html += '<tr>';
+      html += '<td class="fw-600">' + relativeDay(d.date) + '<br><span class="text-muted fs-sm">' + d.date + '</span>' + '</td>';
+      html += '<td class="text-center">' + d.clockIn + '</td>';
+      html += '<td class="text-center">' + (d.isActive ? '<span class="badge badge-warning">ยังไม่เลิก</span>' : d.clockOut) + '</td>';
+      html += '<td class="text-right ' + hoursColor + ' fw-600">' + d.hours + ' ชม.' + '</td>';
+      html += '<td class="text-right">' + d.orderCount + '  บิล' + '</td>';
+      html += '<td class="text-right fw-700 text-accent">' + formatMoneySign(d.dailySales) + '</td>';
+      html += '<td class="text-right">' + formatMoneySign(d.salesPerHour) + '</td>';
+      html += '<td class="text-center ' + statusColor + '">' + statusText + '</td>';
+      html += '</tr>';
+    }
+    
+    html += '</tbody>';
+    html += '</table>';
+    html += '</div>';
+  }
+  
+  var footer = '<button class="btn btn-secondary" onclick="closeMForce()">ปิด</button>';
+  
+  openModal('📋 ประวัติการทำงาน: ' + staff.name, html, footer, { wide: true });
+}
+
+function changeWorkHistoryMonth(staffId, month, year) {
+  var now = new Date();
+  if (month < 0) {
+    month = 11;
+    year--;
+  }
+  if (month > 11) {
+    month = 0;
+    year++;
+  }
+  
+  var staff = findById(ST.getStaff(), staffId);
+  if (staff) {
+    renderWorkHistoryModal(staff, month, year);
+  }
+}
+
+function exportStaffWorkHistory(staffId, month, year) {
+  var staff = findById(ST.getStaff(), staffId);
+  if (!staff) return;
+  
+  var shifts = ST.getShiftsByStaffAndMonth(staffId, month, year);
+  
+  var rows = [];
+  rows.push(['วันที่', 'เวลาเข้า', 'เวลาออก', 'ชั่วโมงทำงาน']);
+  
+  for (var i = 0; i < shifts.length; i++) {
+    var s = shifts[i];
+    var hours = s.clockOut ? calcShiftHours(s) : '';
+    rows.push([s.date, s.clockIn, s.clockOut || 'ยังไม่ออก', hours]);
+  }
+  
+  var csv = rowsToCSV(rows);
+  
+  /* เพิ่ม BOM (Byte Order Mark) สำหรับ UTF-8 */
+  var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = staff.name + '_worklog_' + (year + 543) + '_' + (month + 1) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  
+  toast('ดาวน์โหลดเรียบร้อย', 'success');
 }
 
 console.log('[admin.js] loaded');

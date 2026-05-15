@@ -1,7 +1,7 @@
 /* ============================================
    COFFEE POS — KITCHEN DISPLAY (KDS)
    แสดงออเดอร์สำหรับครัว แยกจอ
-   Version: 2.0 (รวม Hold Order)
+   Version: 3.0 (Fixed + Mobile Support)
    ============================================ */
 
 var KitchenDisplay = {
@@ -22,8 +22,9 @@ var KitchenDisplay = {
     this.channel = new BroadcastChannel('kitchen_display');
     
     /* Listen for messages */
+    var self = this;
     this.channel.onmessage = function(event) {
-      KitchenDisplay.handleMessage(event.data);
+      self.handleMessage(event.data);
     };
     
     /* Load existing orders */
@@ -54,7 +55,7 @@ var KitchenDisplay = {
         this.completeHoldOrderInKitchen(data.holdId);
         break;
       case 'ping':
-        this.channel.postMessage({ type: 'pong' });
+        if (this.channel) this.channel.postMessage({ type: 'pong' });
         break;
     }
   },
@@ -106,7 +107,7 @@ var KitchenDisplay = {
     }
   },
   
-  /* ===== NEW: Add Hold Order ===== */
+  /* Add Hold Order */
   addHoldOrder: function(order) {
     var exists = false;
     for (var i = 0; i < this.orders.length; i++) {
@@ -151,7 +152,6 @@ var KitchenDisplay = {
         this.completedOrders.unshift(completed);
         this.saveOrders();
         
-        /* If this was a hold order, update original */
         if (completed.isHold && completed.holdId) {
           this.updateHoldOrderStatus(completed.holdId, 'completed');
         }
@@ -164,7 +164,7 @@ var KitchenDisplay = {
     }
   },
   
-  /* ===== NEW: Complete Hold Order in Kitchen ===== */
+  /* Complete hold order in kitchen */
   completeHoldOrderInKitchen: function(holdId) {
     for (var i = 0; i < this.orders.length; i++) {
       if (this.orders[i].holdId === holdId || this.orders[i].id === holdId) {
@@ -174,7 +174,6 @@ var KitchenDisplay = {
         this.completedOrders.unshift(completed);
         this.saveOrders();
         
-        /* Update original hold order status */
         this.updateHoldOrderStatus(holdId, 'completed');
         
         if (this.isOpen && typeof renderKitchenView === 'function') {
@@ -185,7 +184,7 @@ var KitchenDisplay = {
     }
   },
   
-  /* ===== NEW: Update hold order status in storage ===== */
+  /* Update hold order status */
   updateHoldOrderStatus: function(holdId, status) {
     var holdOrders = ST.getHoldOrders();
     for (var i = 0; i < holdOrders.length; i++) {
@@ -232,7 +231,7 @@ var KitchenDisplay = {
     this.addOrder(order);
   },
   
-  /* ===== NEW: Send hold order to kitchen ===== */
+  /* Send hold order to kitchen */
   sendHoldOrderToKitchen: function(holdOrder) {
     if (!this.channel) return;
     
@@ -298,18 +297,29 @@ var KitchenDisplay = {
     return window.location.search.indexOf('mode=kitchen') !== -1;
   },
   
-  /* ===== NEW: Format order number from timestamp ===== */
+  /* Format order number from timestamp */
   formatOrderNumber: function(order) {
     if (order.number) return order.number;
     var d = new Date(order.createdAt || Date.now());
     return this.padZero(d.getHours()) + this.padZero(d.getMinutes()) + this.padZero(d.getSeconds());
   },
   
-  /* ===== NEW: Pad zero helper ===== */
+  /* Pad zero helper */
   padZero: function(n) {
     return n < 10 ? '0' + n : '' + n;
   }
 };
+
+/* ============================================
+   GO BACK TO POS
+   ============================================ */
+function goToPOS() {
+  if (typeof nav === 'function') {
+    nav('pos');
+  } else {
+    window.location.href = 'index.html';
+  }
+}
 
 /* ============================================
    RENDER KITCHEN VIEW
@@ -332,6 +342,7 @@ function renderKitchenView() {
   html += '<span class="badge badge-warning">📋 รอทำ: ' + KitchenDisplay.orders.length + '</span>';
   html += '<span class="badge badge-success">✅ เสร็จแล้ว: ' + KitchenDisplay.completedOrders.length + '</span>';
   html += '<button class="btn btn-sm btn-secondary" onclick="KitchenDisplay.openKitchenDisplay()" title="เปิดจอใหม่">🖥️ จอใหม่</button>';
+  html += '<button class="btn btn-sm btn-primary" onclick="goToPOS()" title="กลับไปหน้าร้าน" style="background:linear-gradient(135deg,var(--accent),var(--accent2));">🛒 กลับไป POS</button>';
   html += '</div>';
   html += '</div>';
   
@@ -456,6 +467,7 @@ function renderKitchenCompletedItem(order) {
   css += '.kitchen-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;}';
   css += '.kitchen-title{font-size:28px;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}';
   css += '.kitchen-stats{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}';
+  css += '.kitchen-stats .btn{white-space:nowrap;}';
   css += '.kitchen-section{margin-bottom:32px;}';
   css += '.kitchen-section-title{font-size:18px;font-weight:700;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid var(--accent);display:inline-block;}';
   css += '.kitchen-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px;}';
@@ -481,10 +493,13 @@ function renderKitchenCompletedItem(order) {
   css += '.kitchen-completed-items{flex:1;color:var(--text-muted);}';
   css += '.kitchen-completed-time{font-size:12px;color:var(--text-muted);}';
   
+  /* Mobile responsive */
   css += '@media(max-width:768px){';
+  css += '.kitchen-header{flex-direction:column;align-items:stretch;}';
+  css += '.kitchen-stats{flex-wrap:wrap;justify-content:center;}';
+  css += '.kitchen-stats .btn{flex:1;text-align:center;}';
+  css += '.kitchen-title{text-align:center;margin-bottom:10px;font-size:22px;}';
   css += '.kitchen-grid{grid-template-columns:1fr;}';
-  css += '.kitchen-title{font-size:22px;}';
-  css += '.kitchen-header{flex-direction:column;align-items:flex-start;}';
   css += '}';
   
   var style = document.createElement('style');

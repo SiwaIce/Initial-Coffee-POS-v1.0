@@ -16,7 +16,16 @@ var APP = {
    NAVIGATION
    ============================================ */
 function nav(view) {
-  var validViews = ['pos', 'menu', 'orders', 'report', 'stock', 'admin'];
+  /* ตรวจสอบสิทธิ์พนักงาน */
+  if (APP.currentStaff) {
+    if (!ST.canAccessView(APP.currentStaff, view)) {
+      /* ถ้าเป็น manager แม้แต่ role ไม่ใช่ manager แต่ PIN ถูกต้อง? ให้ใส่ PIN */
+      verifyManagerPIN(view);
+      return;
+    }
+  }
+  
+  var validViews = ['pos', 'menu', 'orders', 'report', 'stock', 'staff', 'members', 'recipe', 'admin'];
   if (validViews.indexOf(view) === -1) view = 'pos';
 
   APP.currentView = view;
@@ -52,6 +61,29 @@ function nav(view) {
   renderView(view);
 }
 
+/* ============================================
+   RENDER STAFF VIEW (Standalone page)
+   ============================================ */
+function renderStaffView() {
+  var main = $('mainContent');
+  if (!main) return;
+  
+  /* Check if renderStaffSettings exists (from admin.js) */
+  if (typeof renderStaffSettings !== 'function') {
+    main.innerHTML = '<div class="page-pad text-center"><div class="empty-state">❌ ไม่สามารถโหลดหน้าพนักงานได้</div></div>';
+    return;
+  }
+  
+  var html = '<div class="page-pad anim-fadeUp">';
+  html += '<div class="section-header">';
+  html += '<div class="section-title">👥 จัดการพนักงาน</div>';
+  html += '</div>';
+  html += renderStaffSettings();
+  html += '</div>';
+  
+  main.innerHTML = html;
+}
+
 function renderView(view) {
   var main = $('mainContent');
   if (!main) return;
@@ -72,11 +104,75 @@ function renderView(view) {
     case 'stock':
       if (typeof renderStockView === 'function') renderStockView();
       break;
+    case 'staff':
+      if (typeof renderStaffView === 'function') renderStaffView();
+      break;
+    case 'members':
+      if (typeof renderMembersView === 'function') renderMembersView();
+      break;
+    case 'recipe':
+      if (typeof renderRecipeView === 'function') renderRecipeView();
+      break;
     case 'admin':
       if (typeof renderAdminView === 'function') renderAdminView();
       break;
     default:
       main.innerHTML = '<div class="empty-state"><div class="empty-icon">🚧</div><div class="empty-text">Coming soon...</div></div>';
+  }
+}
+/* ============================================
+   MANAGER PIN OVERRIDE
+   ============================================ */
+var _pendingView = null;
+
+function verifyManagerPIN(view) {
+  _pendingView = view;
+  
+  var html = '';
+  html += '<div class="text-center mb-16">';
+  html += '<div style="font-size:48px;margin-bottom:8px;">👑</div>';
+  html += '<div class="fw-700 fs-lg mb-4">สิทธิ์ผู้จัดการ</div>';
+  html += '<div class="text-muted fs-sm mb-8">กรุณาใส่ PIN ผู้จัดการ เพื่อเข้าถึงหน้านี้</div>';
+  html += '</div>';
+  
+  html += '<div class="form-group">';
+  html += '<label class="form-label">PIN ผู้จัดการ</label>';
+  html += '<input type="password" id="managerPin" placeholder="****" maxlength="4" inputmode="numeric" style="font-size:24px;text-align:center;letter-spacing:8px;">';
+  html += '</div>';
+  
+  var footer = '';
+  footer += '<button class="btn btn-secondary" onclick="closeMForce()">ยกเลิก</button>';
+  footer += '<button class="btn btn-primary" onclick="submitManagerPIN()">ยืนยัน</button>';
+  
+  openModal('🔐 ยืนยันสิทธิ์', html, footer);
+}
+
+function submitManagerPIN() {
+  var pin = ($('managerPin') || {}).value;
+  if (!pin || pin.length !== 4) {
+    toast('กรุณาใส่ PIN 4 หลัก', 'error');
+    return;
+  }
+  
+  /* หา manager ที่มี PIN นี้ */
+  var staffList = ST.getStaff();
+  var manager = null;
+  for (var i = 0; i < staffList.length; i++) {
+    if (staffList[i].pin === pin && staffList[i].role === 'manager') {
+      manager = staffList[i];
+      break;
+    }
+  }
+  
+  if (manager) {
+    closeMForce();
+    if (_pendingView) {
+      nav(_pendingView);
+    }
+    _pendingView = null;
+    toast('ยืนยันสิทธิ์สำเร็จ', 'success');
+  } else {
+    toast('PIN ผู้จัดการไม่ถูกต้อง', 'error');
   }
 }
 
@@ -86,14 +182,30 @@ function renderView(view) {
 function toggleSidebar() {
   var sidebar = $('sidebar');
   var overlay = $('sidebarOverlay');
+  var mainContent = $('mainContent');
   if (!sidebar) return;
 
-  if (hasClass(sidebar, 'open')) {
-    closeSidebar();
+  /* สำหรับ Desktop: ถ้าไม่ใช่ mobile ให้ toggle class hidden */
+  if (!APP.isMobile) {
+    if (hasClass(sidebar, 'hidden')) {
+      removeClass(sidebar, 'hidden');
+      if (mainContent) removeClass(mainContent, 'sidebar-hidden');
+      localStorage.setItem('sidebarHidden', 'false');
+    } else {
+      addClass(sidebar, 'hidden');
+      if (mainContent) addClass(mainContent, 'sidebar-hidden');
+      localStorage.setItem('sidebarHidden', 'true');
+    }
   } else {
-    addClass(sidebar, 'open');
-    addClass(overlay, 'show');
+    /* Mobile: ใช้ slide open/close */
+    if (hasClass(sidebar, 'open')) {
+      closeSidebar();
+    } else {
+      addClass(sidebar, 'open');
+      addClass(overlay, 'show');
+    }
   }
+  vibrate(20);
 }
 
 function closeSidebar() {
@@ -101,6 +213,24 @@ function closeSidebar() {
   removeClass('sidebarOverlay', 'show');
 }
 
+/* Load saved sidebar state on desktop */
+function loadSidebarState() {
+  if (APP.isMobile) return;
+  
+  var isHidden = localStorage.getItem('sidebarHidden') === 'true';
+  var sidebar = $('sidebar');
+  var mainContent = $('mainContent');
+  
+  if (!sidebar) return;
+  
+  if (isHidden) {
+    addClass(sidebar, 'hidden');
+    if (mainContent) addClass(mainContent, 'sidebar-hidden');
+  } else {
+    removeClass(sidebar, 'hidden');
+    if (mainContent) removeClass(mainContent, 'sidebar-hidden');
+  }
+}
 /* ============================================
    THEME
    ============================================ */
@@ -269,7 +399,6 @@ function checkLowStock() {
    [Standard Version] FEATURE TOGGLE
    ============================================ */
 function applyFeatureToggle() {
-  /* Safety check */
   if (typeof FeatureManager === 'undefined' || !FeatureManager.isEnabled) {
     console.log('[FeatureToggle] FeatureManager not ready yet');
     return;
@@ -281,43 +410,132 @@ function applyFeatureToggle() {
   var sideItems = qsa('.nav-item');
   for (var i = 0; i < sideItems.length; i++) {
     var view = sideItems[i].getAttribute('data-view');
-    if (view === 'stock') {
-      var showStock = FeatureManager.isEnabled('std_stock');
-      sideItems[i].style.display = showStock !== false ? '' : 'none';
-    }
+    var show = FeatureManager.isViewEnabled(view);
+    sideItems[i].style.display = show ? '' : 'none';
   }
 
   /* Bottom Nav */
   var bnavItems = qsa('.bnav-item');
   for (var j = 0; j < bnavItems.length; j++) {
     var bview = bnavItems[j].getAttribute('data-view');
-    if (bview === 'stock') {
-      var showStock2 = FeatureManager.isEnabled('std_stock');
-      bnavItems[j].style.display = showStock2 !== false ? '' : 'none';
+    var bshow = FeatureManager.isViewEnabled(bview);
+    bnavItems[j].style.display = bshow ? '' : 'none';
+  }
+  
+  /* Update sidebar visibility for members/recipe */
+  if (typeof updateSidebarVisibility === 'function') {
+    updateSidebarVisibility();
+  }
+}
+/* อัปเดต Sidebar ตามสิทธิ์พนักงาน */
+function updateSidebarByStaffPermission() {
+  console.log('[updateSidebarByStaffPermission] Called, currentStaff:', APP.currentStaff);
+  
+  var sideItems = qsa('.nav-item');
+  var recentStrip = $('#recentStrip');
+  var holdStrip = $('#holdOrdersStrip');
+  
+  /* ถ้าไม่มี staff login → ซ่อนทุกอย่าง */
+  if (!APP.currentStaff) {
+    /* ซ่อน sidebar ทั้งหมด */
+    for (var i = 0; i < sideItems.length; i++) {
+      sideItems[i].style.display = 'none';
+    }
+    
+    /* ซ่อน recent orders และ hold orders */
+    if (recentStrip) recentStrip.style.display = 'none';
+    if (holdStrip) holdStrip.style.display = 'none';
+    
+    /* ซ่อนปุ่ม Logout แสดงปุ่ม Login */
+    var loginBtn = $('#loginBtn');
+    var logoutBtn = $('#logoutBtn');
+    if (loginBtn) loginBtn.style.display = '';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    
+    return;
+  }
+  
+  /* มี staff login → แสดงตามสิทธิ์ */
+  for (var i = 0; i < sideItems.length; i++) {
+    var view = sideItems[i].getAttribute('data-view');
+    var canAccess = false;
+    
+    if (APP.currentStaff.role === 'manager') {
+      canAccess = true;
+    } else {
+      /* cashier/barista เห็นแค่ POS และ Orders */
+      canAccess = (view === 'pos' || view === 'orders');
+    }
+    
+    sideItems[i].style.display = canAccess ? '' : 'none';
+  }
+  
+  /* แสดง recent orders และ hold orders */
+  if (recentStrip) recentStrip.style.display = '';
+  if (holdStrip) holdStrip.style.display = '';
+  
+  /* แสดงปุ่ม Logout ซ่อนปุ่ม Login */
+  var loginBtn = $('#loginBtn');
+  var logoutBtn = $('#logoutBtn');
+  if (loginBtn) loginBtn.style.display = 'none';
+  if (logoutBtn) logoutBtn.style.display = '';
+}
+
+/* อัปเดต UI ตามสถานะ Login */
+function updateLoginUI() {
+  var isLoggedIn = !!APP.currentStaff;
+  var loginBtn = $('#loginBtn');
+  var logoutBtn = $('#logoutBtn');
+  var topStaff = $('#topStaff');
+  
+  console.log('[updateLoginUI] isLoggedIn:', isLoggedIn);
+  
+  if (isLoggedIn) {
+    if (loginBtn) loginBtn.style.display = 'none';
+    if (logoutBtn) logoutBtn.style.display = '';
+    if (topStaff) {
+      topStaff.textContent = '👤 ' + APP.currentStaff.name;
+      topStaff.style.display = '';
+    }
+  } else {
+    if (loginBtn) loginBtn.style.display = '';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    if (topStaff) {
+      topStaff.textContent = '';
+      topStaff.style.display = 'none';
     }
   }
 }
-
 /* ============================================
    INIT
    ============================================ */
 function initApp() {
   console.log('[app.js] initializing...');
+
   checkMobile();
   applyTheme();
   applyShopName();
   
   /* Apply feature toggles */
   if (typeof FeatureManager !== 'undefined' && FeatureManager.applyToUI) {
-    FeatureManager.applyToUI();  // เรียกตรงนี้
+    FeatureManager.applyToUI();
   } else {
-    applyFeatureToggle(); // fallback
+    applyFeatureToggle();
   }
 
   startClock();
   registerSW();
   initShortcuts();
   window.addEventListener('resize', debouncedResize);
+  
+ /* Load sidebar state after DOM ready */
+  setTimeout(function() {
+    loadSidebarState();
+    updateSidebarVisibility(); 
+        restoreSession();
+    updateSidebarByStaffPermission(); 
+        updateLoginUI();
+  }, 100);
 
   /* 1. Check mobile */
   checkMobile();
@@ -381,4 +599,74 @@ if (document.readyState === 'loading') {
   initApp();
 }
 
+function showStaffMenu() {
+  if (!APP.currentStaff) return;
+  
+  var html = '';
+  html += '<div class="text-center mb-16">';
+  html += '<div style="font-size:48px;">👤</div>';
+  html += '<div class="fw-800 fs-lg mt-2">' + sanitize(APP.currentStaff.name) + '</div>';
+  html += '<div class="text-muted">' + getRoleName(APP.currentStaff.role) + '</div>';
+  html += '</div>';
+  
+  html += '<div class="card-glass p-16 mb-16">';
+  html += '<div class="flex-between mb-8">';
+  html += '<span>ตำแหน่ง</span>';
+  html += '<span>' + getRoleName(APP.currentStaff.role) + '</span>';
+  html += '</div>';
+  html += '<div class="flex-between">';
+  html += '<span>สถานะ</span>';
+  html += '<span class="badge badge-success">กำลังทำงาน</span>';
+  html += '</div>';
+  html += '</div>';
+  
+  html += '<div class="flex gap-8">';
+  html += '<button class="btn btn-secondary" onclick="closeMForce()">ปิด</button>';
+  html += '<button class="btn btn-danger" onclick="closeMForce(); logoutStaff()">🚪 ออกจากระบบ</button>';
+  html += '</div>';
+  
+  openModal('👤 บัญชีของฉัน', html);
+}
+/* ============================================
+   RESTORE LOGIN SESSION AFTER REFRESH
+   ============================================ */
+function restoreSession() {
+  var savedSession = ST.getObj('current_session', null);
+  
+  if (savedSession && savedSession.staffId) {
+    var staff = findById(ST.getStaff(), savedSession.staffId);
+    
+    if (staff && staff.active !== false) {
+      APP.currentStaff = staff;
+      
+      /* อัปเดต UI */
+      updateLoginUI();
+      updateSidebarByStaffPermission();
+      
+      console.log('[Session] Restored login for:', staff.name);
+      return true;
+    } else {
+      /* session หมดอายุ หรือ staff ถูกลบ */
+      ST.remove('current_session');
+    }
+  }
+  
+  return false;
+}
+/* ============================================
+   UPDATE SIDEBAR VISIBILITY (Feature Toggle)
+   ============================================ */
+function updateSidebarVisibility() {
+  if (typeof FeatureManager === 'undefined') return;
+  
+  var showMembers = FeatureManager.isEnabled('pro_members');
+  var showRecipe = FeatureManager.isEnabled('pro_recipe');
+  var showMenuImage = FeatureManager.isEnabled('pro_menu_image');
+  
+  var membersNav = $('#navMembers');
+  var recipeNav = $('#navRecipe');
+  
+  if (membersNav) membersNav.style.display = showMembers ? '' : 'none';
+  if (recipeNav) recipeNav.style.display = showRecipe ? '' : 'none';
+}
 console.log('[app.js] loaded');

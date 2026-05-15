@@ -204,7 +204,7 @@ var SuperAdmin = {
     return true;
   },
 
-  /* ============================================
+/* ============================================
      SHOW ADMIN PANEL (Full Feature Management)
      ============================================ */
   showAdminPanel: function() {
@@ -250,44 +250,50 @@ var SuperAdmin = {
     html += '</div>';
     html += '</div>';
     
-    /* Preset Section */
+    /* Preset Section - 3 ปุ่มใหญ่ */
     html += '<div class="card mb-16">';
     html += '<div class="card-header">';
     html += '<div class="card-title">📦 Preset การตั้งค่า</div>';
     html += '<div class="text-muted fs-sm">เลือกชุดฟีเจอร์สำเร็จรูป</div>';
     html += '</div>';
-    html += '<div class="admin-actions">';
+    html += '<div class="preset-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">';
     
-    for (var p in FEATURE_PRESETS) {
-      var preset = FEATURE_PRESETS[p];
-      var isDisabled = (p === 'pro' && licenseTier !== 'pro');
-      var disabledAttr = isDisabled ? ' style="opacity:0.5;cursor:not-allowed;"' : '';
-      var onclickAttr = !isDisabled ? ' onclick="SuperAdmin.applyPresetWithConfirm(\'' + p + '\')"' : '';
-      
-      html += '<div class="admin-action-card"' + disabledAttr + onclickAttr + '>';
-      html += '<div class="admin-action-icon">' + preset.icon + '</div>';
-      html += '<div class="admin-action-info">';
-      html += '<div class="fw-600">' + preset.name + '</div>';
-      html += '<div class="text-muted fs-sm">' + preset.description + '</div>';
-      html += '</div>';
-      if (isDisabled) {
-        html += '<div><span class="badge badge-warning">ต้องมี Pro License</span></div>';
-      }
-      html += '</div>';
+    /* Free Preset */
+    html += '<div class="preset-card" onclick="SuperAdmin.applyPresetWithConfirm(\'free\')" style="cursor:pointer;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;transition:all var(--transition);">';
+    html += '<div style="font-size:32px;">🆓</div>';
+    html += '<div class="fw-700 mt-4">Free</div>';
+    html += '<div class="text-muted fs-sm">ฟีเจอร์พื้นฐาน</div>';
+    html += '</div>';
+    
+    /* Standard Preset */
+    html += '<div class="preset-card" onclick="SuperAdmin.applyPresetWithConfirm(\'standard\')" style="cursor:pointer;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;transition:all var(--transition);">';
+    html += '<div style="font-size:32px;">📦</div>';
+    html += '<div class="fw-700 mt-4">Standard</div>';
+    html += '<div class="text-muted fs-sm">ฟีเจอร์ทั่วไป</div>';
+    html += '</div>';
+    
+    /* Pro Preset */
+    var proDisabled = (licenseTier !== 'pro') ? ' style="opacity:0.5;cursor:not-allowed;"' : '';
+    html += '<div class="preset-card" onclick="' + (licenseTier === 'pro' ? 'SuperAdmin.applyPresetWithConfirm(\'pro\')' : '') + '"' + proDisabled + ' style="cursor:pointer;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;transition:all var(--transition);">';
+    html += '<div style="font-size:32px;">⭐</div>';
+    html += '<div class="fw-700 mt-4">Pro</div>';
+    html += '<div class="text-muted fs-sm">ฟีเจอร์ทั้งหมด</div>';
+    if (licenseTier !== 'pro') {
+      html += '<div class="text-warning fs-sm mt-2">ต้องมี Pro License</div>';
     }
+    html += '</div>';
     
     html += '</div>';
     html += '</div>';
     
-    /* Feature Toggles - Core */
+    /* Feature Toggles - Core (อ่านอย่างเดียว) */
     if (features.core.length > 0) {
       html += '<div class="card mb-16">';
       html += '<div class="card-header"><div class="card-title">📌 CORE (เปิดตลอด - เปลี่ยนไม่ได้)</div></div>';
       for (var c = 0; c < features.core.length; c++) {
         var f = features.core[c];
-        html += '<div class="admin-action-card" style="opacity:0.7;">';
-        html += '<div class="admin-action-icon">' + (f.enabled ? '✅' : '❌') + '</div>';
-        html += '<div class="admin-action-info">';
+        html += '<div class="feature-toggle-item" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">';
+        html += '<div>';
         html += '<div class="fw-600">' + f.name + '</div>';
         html += '<div class="text-muted fs-sm">' + f.description + '</div>';
         html += '</div>';
@@ -297,31 +303,34 @@ var SuperAdmin = {
       html += '</div>';
     }
     
-    /* Feature Toggles - Standard */
+    /* Feature Toggles - Standard (Toggle ได้) */
     if (features.standard.length > 0) {
       html += '<div class="card mb-16">';
       html += '<div class="card-header">';
       html += '<div class="card-title">📦 STANDARD FEATURES</div>';
-      html += '<div class="text-muted fs-sm">สามารถเปิด/ปิดได้ (Standard License)</div>';
+      html += '<div class="text-muted fs-sm">คลิกที่การ์ดเพื่อเปิด/ปิด</div>';
       html += '</div>';
       
       for (var s = 0; s < features.standard.length; s++) {
         var f2 = features.standard[s];
         var isOn = f2.enabled;
         
-        html += '<div class="admin-action-card" style="cursor:pointer;" onclick="SuperAdmin.toggleFeatureConfirm(\'' + f2.id + '\', ' + (!isOn) + ')">';
-        html += '<div class="admin-action-icon">' + (isOn ? '✅' : '🔒') + '</div>';
-        html += '<div class="admin-action-info">';
+        html += '<div class="feature-toggle-item ' + (isOn ? 'enabled' : 'disabled') + '" style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="SuperAdmin.toggleFeatureQuick(\'' + f2.id + '\')">';
+        html += '<div>';
         html += '<div class="fw-600">' + f2.name + '</div>';
         html += '<div class="text-muted fs-sm">' + f2.description + '</div>';
         html += '</div>';
-        html += '<div>' + (isOn ? '<span class="badge badge-success">เปิด</span>' : '<span class="badge badge-danger">ปิด</span>') + '</div>';
+        html += '<div class="feature-toggle-switch">';
+        html += '<div class="toggle-switch ' + (isOn ? 'on' : 'off') + '" style="width:44px;height:24px;background:' + (isOn ? 'var(--success)' : 'var(--border)') + ';border-radius:12px;position:relative;transition:all 0.2s;">';
+        html += '<div class="toggle-slider" style="width:20px;height:20px;background:#fff;border-radius:50%;position:absolute;top:2px;' + (isOn ? 'right:2px' : 'left:2px') + ';transition:all 0.2s;"></div>';
+        html += '</div>';
+        html += '</div>';
         html += '</div>';
       }
       html += '</div>';
     }
     
-    /* Feature Toggles - Pro */
+    /* Feature Toggles - Pro (Toggle ได้ ถ้ามี Pro License) */
     if (features.pro.length > 0) {
       var canEditPro = (licenseTier === 'pro');
       
@@ -331,7 +340,7 @@ var SuperAdmin = {
       if (!canEditPro) {
         html += '<div class="text-muted fs-sm text-warning">🔐 ต้องมี Pro License จึงจะเปิดฟีเจอร์เหล่านี้ได้</div>';
       } else {
-        html += '<div class="text-muted fs-sm">สามารถเปิด/ปิดได้ (Pro License)</div>';
+        html += '<div class="text-muted fs-sm">คลิกที่การ์ดเพื่อเปิด/ปิด</div>';
       }
       html += '</div>';
       
@@ -339,20 +348,20 @@ var SuperAdmin = {
         var f3 = features.pro[pr];
         var isOn3 = f3.enabled;
         var canToggle = canEditPro && f3.canToggle;
+        var clickHandler = canToggle ? 'SuperAdmin.toggleFeatureQuick(\'' + f3.id + '\')' : '';
         
-        html += '<div class="admin-action-card" ' + (canToggle ? 'style="cursor:pointer;" onclick="SuperAdmin.toggleFeatureConfirm(\'' + f3.id + '\', ' + (!isOn3) + ')"' : 'style="opacity:0.6;"') + '>';
-        html += '<div class="admin-action-icon">' + (isOn3 ? '✅' : (canEditPro ? '🔒' : '🔐')) + '</div>';
-        html += '<div class="admin-action-info">';
+        html += '<div class="feature-toggle-item ' + (isOn3 ? 'enabled' : 'disabled') + '" style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);' + (canToggle ? 'cursor:pointer;' : 'opacity:0.6;') + '" ' + (clickHandler ? 'onclick="' + clickHandler + '"' : '') + '>';
+        html += '<div>';
         html += '<div class="fw-600">' + f3.name + ' <span class="badge badge-accent">Pro</span></div>';
         html += '<div class="text-muted fs-sm">' + f3.description + '</div>';
         html += '</div>';
         html += '<div>';
         if (!canEditPro) {
           html += '<span class="badge badge-warning">ต้องมี Pro License</span>';
-        } else if (isOn3) {
-          html += '<span class="badge badge-success">เปิด</span>';
         } else {
-          html += '<span class="badge badge-danger">ปิด</span>';
+          html += '<div class="toggle-switch ' + (isOn3 ? 'on' : 'off') + '" style="width:44px;height:24px;background:' + (isOn3 ? 'var(--success)' : 'var(--border)') + ';border-radius:12px;position:relative;transition:all 0.2s;">';
+          html += '<div class="toggle-slider" style="width:20px;height:20px;background:#fff;border-radius:50%;position:absolute;top:2px;' + (isOn3 ? 'right:2px' : 'left:2px') + ';transition:all 0.2s;"></div>';
+          html += '</div>';
         }
         html += '</div>';
         html += '</div>';
@@ -360,30 +369,29 @@ var SuperAdmin = {
       html += '</div>';
     }
     
-    /* Danger Zone */
-    html += '<div class="card" style="border-color:var(--danger);">';
-    html += '<div class="card-header"><div class="card-title text-danger">⚠️ Danger Zone</div></div>';
-    html += '<div class="admin-actions">';
-    html += '<div class="admin-action-card danger" onclick="SuperAdmin.resetFeaturesConfirm()">';
-    html += '<div class="admin-action-icon">🔄</div>';
-    html += '<div class="admin-action-info">';
-    html += '<div class="fw-600">รีเซ็ตการตั้งค่าฟีเจอร์ทั้งหมด</div>';
-    html += '<div class="text-muted fs-sm">คืนค่าฟีเจอร์ทั้งหมดเป็นค่าเริ่มต้น</div>';
-    html += '</div>';
-    html += '</div>';
-    html += '<div class="admin-action-card danger" onclick="SuperAdmin.logout()">';
-    html += '<div class="admin-action-icon">🚪</div>';
-    html += '<div class="admin-action-info">';
-    html += '<div class="fw-600">ออกจากระบบ Super Admin</div>';
-    html += '<div class="text-muted fs-sm">กลับสู่โหมดปกติ</div>';
-    html += '</div>';
-    html += '</div>';
-    html += '</div>';
+    /* Action Buttons */
+    html += '<div class="flex gap-8 mb-16">';
+    html += '<button class="btn btn-secondary" onclick="SuperAdmin.resetFeaturesConfirm()" style="flex:1;">🔄 รีเซ็ตทั้งหมด</button>';
+    html += '<button class="btn btn-danger" onclick="SuperAdmin.logout()" style="flex:1;">🚪 ออกจากระบบ</button>';
     html += '</div>';
     
-    var footer = '<button class="btn btn-secondary" onclick="closeMForce()">ปิด</button>';
+    var footer = '<button class="btn btn-primary" onclick="closeMForce()">ปิด</button>';
     
     openModal('👑 Super Admin', html, footer, { wide: true });
+  },
+
+  /* ============================================
+     NEW: Toggle Feature แบบรวดเร็ว (ไม่ต้อง confirm)
+     ============================================ */
+  toggleFeatureQuick: function(featureId) {
+    var feature = FEATURE_REGISTRY[featureId];
+    if (!feature) return;
+    
+    var currentState = FeatureManager.isEnabled(featureId);
+    var newState = !currentState;
+    
+    FeatureManager.toggleFeature(featureId, newState);
+    this.showAdminPanel(); // Refresh panel
   },
 
   /* ============================================
@@ -412,11 +420,40 @@ var SuperAdmin = {
   },
 
   applyPresetWithConfirm: function(presetKey) {
-    var preset = FEATURE_PRESETS[presetKey];
-    confirmDialog('ตั้งค่าเป็น ' + preset.name + '? (การตั้งค่าปัจจุบันจะถูกแทนที่)', function() {
-      FeatureManager.applyPreset(presetKey);
+    var presetNames = { free: '🆓 Free', standard: '📦 Standard', pro: '⭐ Pro' };
+    var presetName = presetNames[presetKey] || presetKey;
+    
+    confirmDialog('ตั้งค่าเป็น ' + presetName + '? (การตั้งค่าปัจจุบันจะถูกแทนที่)', function() {
+      if (presetKey === 'free') {
+        SuperAdmin.applyFreePreset();
+      } else {
+        FeatureManager.applyPreset(presetKey);
+      }
       SuperAdmin.showAdminPanel();
     });
+  },
+  
+  /* Free Preset (ปิดทุกอย่างยกเว้น core) */
+  applyFreePreset: function() {
+    var overrides = {};
+    
+    /* ปิด Standard Features ทั้งหมด */
+    var stdFeatures = ['std_stock', 'std_staff', 'std_line', 'std_promptpay', 
+                       'std_channels', 'std_favorites', 'std_recent', 'std_sound', 'std_report'];
+    for (var i = 0; i < stdFeatures.length; i++) {
+      overrides[stdFeatures[i]] = false;
+    }
+    
+    /* ปิด Pro Features ทั้งหมด */
+    var proFeatures = ['pro_members', 'pro_recipe', 'pro_autostock', 'pro_kds', 
+                       'pro_realtime', 'pro_advanced_report'];
+    for (var j = 0; j < proFeatures.length; j++) {
+      overrides[proFeatures[j]] = false;
+    }
+    
+    FeatureManager.saveOverrides(overrides);
+    FeatureManager.applyToUI();
+    toast('ตั้งค่าเป็น Free แล้ว', 'success');
   },
 
   resetFeaturesConfirm: function() {
@@ -441,5 +478,22 @@ if (document.readyState === 'loading') {
 } else {
   SuperAdmin.init();
 }
+
+/* Super Admin Panel CSS */
+(function() {
+  var styleId = 'superAdminStyle';
+  if (document.getElementById(styleId)) return;
+  
+  var css = '';
+  css += '.preset-card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--shadow);}';
+  css += '.feature-toggle-item:hover{background:var(--glass);}';
+  css += '.feature-toggle-item.enabled .fw-600{color:var(--success);}';
+  css += '.toggle-switch{transition:all 0.2s;}';
+  
+  var style = document.createElement('style');
+  style.id = styleId;
+  style.textContent = css;
+  document.head.appendChild(style);
+})();
 
 console.log('[super-admin.js] loaded');

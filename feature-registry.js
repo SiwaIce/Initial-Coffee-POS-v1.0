@@ -68,7 +68,7 @@ var FEATURE_REGISTRY = {
     id: 'std_report',
     name: '📊 รายงานพื้นฐาน',
     tier: 'standard',
-    canToggle: false,
+    canToggle: true,
     defaultValue: true,
     description: 'Dashboard + รายงานยอดขาย'
   },
@@ -76,7 +76,7 @@ var FEATURE_REGISTRY = {
     id: 'std_export',
     name: '📤 Export CSV',
     tier: 'standard',
-    canToggle: false,
+    canToggle: true,
     defaultValue: true,
     description: 'ส่งออกข้อมูล CSV'
   },
@@ -85,7 +85,7 @@ var FEATURE_REGISTRY = {
     name: '💬 LINE Notify',
     tier: 'standard',
     canToggle: true,
-    defaultValue: false,
+    defaultValue: true,
     description: 'แจ้งเตือนผ่าน LINE'
   },
   std_promptpay: {
@@ -118,7 +118,15 @@ var FEATURE_REGISTRY = {
     tier: 'standard',
     canToggle: true,
     defaultValue: true,
-    description: 'แสดงออเดอร์ล่าสุด'
+    description: 'แสดงออเดอร์ล่าสุดในหน้า POS'
+  },
+  std_hold: {
+    id: 'std_hold',
+    name: '📋 ออเดอร์ค้าง',
+    tier: 'standard',
+    canToggle: true,
+    defaultValue: true,
+    description: 'แสดงออเดอร์ค้างในหน้า POS'
   },
   std_sound: {
     id: 'std_sound',
@@ -129,7 +137,7 @@ var FEATURE_REGISTRY = {
     description: 'เสียงแจ้งเตือน'
   },
 
-   /* === PRO (ต้องมี Pro License) === */
+  /* === PRO (ต้องมี Pro License) === */
   pro_members: {
     id: 'pro_members',
     name: '👤 สมาชิก + แต้มสะสม',
@@ -185,6 +193,15 @@ var FEATURE_REGISTRY = {
     description: 'COGS, กำไรสุทธิ, วิเคราะห์',
     requiresLicense: true,
     dependsOn: 'pro_recipe'
+  },
+  pro_menu_image: {
+    id: 'pro_menu_image',
+    name: '🖼️ รูปเมนู',
+    tier: 'pro',
+    canToggle: true,
+    defaultValue: false,
+    description: 'เพิ่มรูปภาพให้เมนู (เฉพาะ Pro)',
+    requiresLicense: true
   }
 };
 
@@ -203,13 +220,13 @@ var FEATURE_PRESETS = {
       std_favorites: true,
       std_recent: true,
       std_sound: true,
-      // Pro features are OFF in Standard
       pro_members: false,
       pro_recipe: false,
       pro_autostock: false,
       pro_kds: false,
       pro_realtime: false,
-      pro_advanced_report: false
+      pro_advanced_report: false,
+      pro_menu_image: false
     }
   },
   pro: {
@@ -225,13 +242,13 @@ var FEATURE_PRESETS = {
       std_favorites: true,
       std_recent: true,
       std_sound: true,
-      // Pro features are ON
       pro_members: true,
       pro_recipe: true,
       pro_autostock: true,
       pro_kds: true,
       pro_realtime: true,
-      pro_advanced_report: true
+      pro_advanced_report: true,
+      pro_menu_image: true
     }
   },
   custom: {
@@ -422,6 +439,9 @@ var FeatureManager = {
       'orders': 'core_orders',
       'report': 'std_report',
       'stock': 'std_stock',
+      'staff': 'std_staff',
+      'members': 'pro_members',
+      'recipe': 'pro_recipe',
       'admin': 'core_admin'
     };
 
@@ -436,6 +456,18 @@ var FeatureManager = {
     if (licenseTier === 'pro') return '⭐ Pro';
     return '📦 Standard';
   }
+};
+
+// ใน FeatureManager.applyToUI() หรือสร้างฟังก์ชันใหม่
+function updateSidebarVisibility() {
+  var showMembers = FeatureManager.isEnabled('pro_members');
+  var showRecipe = FeatureManager.isEnabled('pro_recipe');
+  
+  var membersNav = $('#navMembers');
+  var recipeNav = $('#navRecipe');
+  
+  if (membersNav) membersNav.style.display = showMembers ? '' : 'none';
+  if (recipeNav) recipeNav.style.display = showRecipe ? '' : 'none';
 };
 
 console.log('[feature-registry.js] loaded');

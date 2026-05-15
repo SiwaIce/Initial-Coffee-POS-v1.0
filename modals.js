@@ -82,11 +82,17 @@ function modalAddToCart(menuItem) {
   var sweetLevels = ST.getSweetLevels().filter(function(s) { return s.active !== false; });
   var drinkTypes = ST.getDrinkTypes().filter(function(d) { return d.active !== false; });
   var prices = menuItem.prices || {};
+  var sizeActive = menuItem.sizeActive || {};
 
+  /* กรองเฉพาะขนาดที่เปิดใช้งาน */
   var availSizes = [];
   for (var i = 0; i < sizes.length; i++) {
-    var p = prices[sizes[i].name];
-    if (p !== undefined && p > 0) availSizes.push(sizes[i]);
+    var sizeName = sizes[i].name;
+    var isActive = sizeActive[sizeName] !== false;
+    var p = prices[sizeName];
+    if (isActive && p !== undefined && p > 0) {
+      availSizes.push(sizes[i]);
+    }
   }
 
   var singleSize = availSizes.length <= 1;
@@ -137,7 +143,7 @@ function modalAddToCart(menuItem) {
     html += '<input type="hidden" id="singleDrinkType" value="' + sanitize(menuDrinkTypes[0].id) + '" data-price="' + (menuDrinkTypes[0].addPrice || 0) + '">';
   }
 
-  /* === 2. Size (compact) === */
+  /* === 2. Size (compact) - แสดงเฉพาะขนาดที่เปิด === */
   if (!singleSize) {
     html += '<div class="form-group">';
     html += '<label class="form-label">📏 ขนาด</label>';
@@ -237,7 +243,6 @@ function modalAddToCart(menuItem) {
   footer += '<button class="btn btn-secondary" onclick="closeMForce()">ยกเลิก</button>';
   footer += '<button class="btn btn-primary" onclick="confirmAddToCart()" style="flex:1;">🛒 เพิ่มลงตะกร้า</button>';
 
-  /* noAutoFocus = true → ไม่ focus ที่ input ใดๆ */
   openModal(sanitize(menuItem.name), html, footer, { noAutoFocus: true });
 
   setTimeout(function() {
@@ -495,7 +500,7 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
   html += '<div class="cart-row total"><span>💰 ยอดชำระ</span><span>' + formatMoneySign(grandTotal) + '</span></div>';
   html += '</div>';
 
-  /* ===== NEW: Sales Channel ===== */
+  /* Sales Channel */
   var channels = ST.getActiveChannels();
   if (channels.length > 0) {
     html += '<div class="form-group mb-16">';
@@ -503,7 +508,7 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
     html += '<div class="option-selector-sm" id="modalChannelSelector">';
     for (var ch = 0; ch < channels.length; ch++) {
       var c = channels[ch];
-      var chActive = (c.id === (POS.selectedChannel || 'ch_walkin')) ? ' active' : '';
+      var chActive = (c.id === (typeof POS !== 'undefined' && POS.selectedChannel ? POS.selectedChannel : 'ch_walkin')) ? ' active' : '';
       html += '<div class="opt-btn-sm' + chActive + '" data-id="' + sanitize(c.id) + '" data-name="' + sanitize(c.name) + '" onclick="selectModalChannel(this)">';
       html += '<span>' + (c.emoji || '🏪') + '</span>';
       html += '<span>' + sanitize(c.name) + '</span>';
@@ -513,19 +518,18 @@ function modalPayment(cartItems, subtotal, discount, discountType) {
     html += '</div>';
   }
 
- /* Payment method */
-html += '<div class="form-group">';
-html += '<label class="form-label">💵 วิธีชำระเงิน</label>';
-html += '<div class="payment-methods" id="payMethods">';
-html += '<div class="pay-method active" data-method="cash" onclick="selectPayMethod(this)">';
-html += '<div class="pay-method-icon">💵</div><div>เงินสด</div></div>';
-html += '<div class="pay-method" data-method="transfer" onclick="selectPayMethod(this)">';
-html += '<div class="pay-method-icon">📱</div><div>โอน</div></div>';
-html += '<div class="pay-method" data-method="promptpay" onclick="selectPayMethod(this)">';
-html += '<div class="pay-method-icon">📷</div><div>QR</div></div>';
-html += '</div>';
-html += '</div>';
-
+  /* Payment method */
+  html += '<div class="form-group">';
+  html += '<label class="form-label">💵 วิธีชำระเงิน</label>';
+  html += '<div class="payment-methods" id="payMethods">';
+  html += '<div class="pay-method active" data-method="cash" onclick="selectPayMethod(this)">';
+  html += '<div class="pay-method-icon">💵</div><div>เงินสด</div></div>';
+  html += '<div class="pay-method" data-method="transfer" onclick="selectPayMethod(this)">';
+  html += '<div class="pay-method-icon">📱</div><div>โอน</div></div>';
+  html += '<div class="pay-method" data-method="promptpay" onclick="selectPayMethod(this)">';
+  html += '<div class="pay-method-icon">📷</div><div>QR</div></div>';
+  html += '</div>';
+  html += '</div>';
 
   /* Cash section */
   html += '<div id="cashSection">';
@@ -638,8 +642,7 @@ function selectModalChannel(el) {
   var siblings = parent.querySelectorAll('.opt-btn-sm');
   for (var i = 0; i < siblings.length; i++) removeClass(siblings[i], 'active');
   addClass(el, 'active');
-  
-  /* Store selected channel for order */
+
   var channelId = el.getAttribute('data-id');
   var channelName = el.getAttribute('data-name');
   if (typeof POS !== 'undefined') {
@@ -709,7 +712,6 @@ function confirmPayment() {
     change = 0;
   }
 
-  /* Normalize promptpay → qr for storage */
   var paymentMethod = method === 'promptpay' ? 'qr' : method;
 
   var orderData = {
@@ -873,7 +875,7 @@ if (order.channelName && order.channelName !== 'Walk-in') {
 }
 
 /* ============================================
-   MODAL: EDIT MENU ITEM (v3)
+   MODAL: EDIT MENU ITEM (v3 + Size Toggle)
    ============================================ */
 function modalEditMenu(item) {
   var isNew = !item;
@@ -881,6 +883,7 @@ function modalEditMenu(item) {
   var cats = ST.getCategories();
   var sizes = ST.getSizes();
   var drinkTypes = ST.getDrinkTypes();
+  var sizeActive = m.sizeActive || {};
 
   var html = '';
 
@@ -905,24 +908,63 @@ function modalEditMenu(item) {
   html += '</div>';
   html += '</div>';
 
+  /* ราคาตามขนาดพร้อม checkbox เปิด/ปิด */
   html += '<div class="form-group">';
   html += '<label class="form-label">ราคาตามขนาด (฿)</label>';
-  html += '<div class="form-row">';
+  html += '<div class="form-row" style="gap:8px;">';
+  
   for (var s = 0; s < sizes.length; s++) {
-    var pv = (m.prices && m.prices[sizes[s].name]) ? m.prices[sizes[s].name] : '';
-    html += '<div>';
-    html += '<label class="form-label" style="text-align:center;">' + sanitize(sizes[s].name) + '</label>';
-    html += '<input type="number" id="fMenuPrice_' + sanitize(sizes[s].name) + '" value="' + pv + '" placeholder="0" inputmode="numeric">';
+    var sizeName = sizes[s].name;
+    var priceValue = (m.prices && m.prices[sizeName]) ? m.prices[sizeName] : '';
+    var isActive = sizeActive[sizeName] !== false;
+    
+    html += '<div style="flex:1;text-align:center;">';
+    html += '<label class="checkbox-wrap" style="justify-content:center;margin-bottom:4px;">';
+    html += '<input type="checkbox" class="size-active-chk" data-size="' + sizeName + '" ' + (isActive ? 'checked' : '') + ' onchange="toggleSizePrice(this)">';
+    html += '<span style="font-size:12px;">' + sizeName + '</span>';
+    html += '</label>';
+    html += '<input type="number" id="fMenuPrice_' + sizeName + '" value="' + priceValue + '" placeholder="0" inputmode="numeric" style="text-align:center;" ' + (isActive ? '' : 'disabled') + '>';
     html += '</div>';
   }
   html += '</div>';
-  html += '<div class="form-hint">เว้นว่างหรือ 0 = ไม่มีขนาดนี้</div>';
+  html += '<div class="form-hint">✅ เปิดใช้งานขนาด / ☐ ปิด (ไม่แสดงใน POS)</div>';
   html += '</div>';
 
   html += '<div class="form-group">';
   html += '<label class="form-label">ต้นทุน (฿)</label>';
   html += '<input type="number" id="fMenuCost" value="' + (m.cost || '') + '" placeholder="0" inputmode="numeric">';
   html += '</div>';
+
+  /* ต้นทุนอัตโนมัติจาก Recipe (เฉพาะ Pro) */
+  if (typeof FeatureManager !== 'undefined' && FeatureManager.isEnabled('pro_recipe')) {
+    var autoCost = 0;
+    var recipe = ST.getRecipe(m.id, null);
+    if (recipe) {
+      autoCost = ST.calculateRecipeCost(recipe);
+    }
+    
+    html += '<div class="card p-16 mb-16" style="border-color:var(--accent2);">';
+    html += '<div class="flex-between mb-8">';
+    html += '<div class="fw-700">🧪 ต้นทุนอัตโนมัติจากสูตร</div>';
+    html += '<label class="toggle-wrap" onclick="toggleToggle(this)">';
+    html += '<div class="toggle' + (m.useAutoCost ? ' on' : '') + '" id="fMenuUseAutoCost" style="width:36px;height:20px;"></div>';
+    html += '</label>';
+    html += '</div>';
+    html += '<div class="text-muted fs-sm mb-8">เปิดใช้งาน จะใช้ต้นทุนที่คำนวณจากสูตรวัตถุดิบแทนการกรอกเอง</div>';
+    html += '<div class="card-glass p-12">';
+    html += '<div class="flex-between">';
+    html += '<span class="text-muted">ต้นทุนจากสูตร</span>';
+    html += '<span class="fw-800 text-accent" id="autoCostDisplay">' + formatMoneySign(autoCost) + '</span>';
+    html += '</div>';
+    if (recipe) {
+      html += '<div class="text-muted fs-sm mt-4">คำนวณจากสูตรวัตถุดิบ</div>';
+    } else {
+      html += '<div class="text-warning fs-sm mt-4">⚠️ ยังไม่มีสูตรวัตถุดิบสำหรับเมนูนี้</div>';
+      html += '<button class="btn btn-sm btn-secondary mt-4" onclick="closeMForce(); nav(\'recipe\')">ไปสร้างสูตร</button>';
+    }
+    html += '</div>';
+    html += '</div>';
+  }
 
   /* Drink Type */
   html += '<div class="card p-16 mb-16" style="border-color:var(--accent2);">';
@@ -970,6 +1012,30 @@ function modalEditMenu(item) {
   html += '<span>เปิดขาย</span>';
   html += '</label>';
   html += '</div>';
+/* ===== รูปเมนู (เฉพาะ Pro) ===== */
+if (typeof FeatureManager !== 'undefined' && FeatureManager.isEnabled('pro_menu_image')) {
+  html += '<div class="form-group">';
+  html += '<label class="form-label">🖼️ รูปเมนู (URL)</label>';
+  html += '<input type="text" id="fMenuImage" value="' + sanitize(m.image || '') + '" placeholder="https://...">';
+  html += '<div class="form-hint">ใส่ลิงก์รูป (แนะนำ 200x200px) ถ้าไม่มีจะใช้ Emoji แทน</div>';
+  html += '<div id="imagePreview" style="margin-top:8px;"></div>';
+  html += '</div>';
+  
+  /* Preview script */
+  html += '<script>';
+  html += 'function previewMenuImage() {';
+  html += '  var url = $("fMenuImage").value;';
+  html += '  var preview = $("imagePreview");';
+  html += '  if (preview && url) {';
+  html += '    preview.innerHTML = "<img src=\\" + url + "\\" style=\\"width:60px;height:60px;object-fit:cover;border-radius:8px;\\" onerror=\\"this.style.display=\'none\'\\">";';
+  html += '  } else if (preview) {';
+  html += '    preview.innerHTML = "";';
+  html += '  }';
+  html += '}';
+  html += 'setTimeout(function(){ previewMenuImage(); }, 100);';
+  html += 'document.getElementById("fMenuImage").oninput = previewMenuImage;';
+  html += '</script>';
+}
 
   html += '<input type="hidden" id="fMenuId" value="' + sanitize(m.id || '') + '">';
 
@@ -983,6 +1049,17 @@ function modalEditMenu(item) {
   openModal(isNew ? '➕ เพิ่มเมนู' : '✏️ แก้ไขเมนู', html, footer);
 }
 
+function toggleSizePrice(checkbox) {
+  var sizeName = checkbox.getAttribute('data-size');
+  var priceInput = $('fMenuPrice_' + sizeName);
+  if (priceInput) {
+    priceInput.disabled = !checkbox.checked;
+    if (!checkbox.checked) {
+      priceInput.value = '';
+    }
+  }
+}
+
 function saveMenuFromModal() {
   var id = ($('fMenuId') || {}).value;
   var name = ($('fMenuName') || {}).value.trim();
@@ -990,10 +1067,31 @@ function saveMenuFromModal() {
 
   var sizes = ST.getSizes();
   var prices = {};
+  var sizeActive = {};
+  
   for (var i = 0; i < sizes.length; i++) {
-    var p = parseFloat(($('fMenuPrice_' + sizes[i].name) || {}).value) || 0;
-    if (p > 0) prices[sizes[i].name] = p;
+    var sizeName = sizes[i].name;
+    var priceInput = $('fMenuPrice_' + sizeName);
+    var isActive = false;
+    
+    var checkboxes = qsa('.size-active-chk');
+    for (var c = 0; c < checkboxes.length; c++) {
+      if (checkboxes[c].getAttribute('data-size') === sizeName && checkboxes[c].checked) {
+        isActive = true;
+        break;
+      }
+    }
+    
+    sizeActive[sizeName] = isActive;
+    
+    if (isActive && priceInput) {
+      var p = parseFloat(priceInput.value) || 0;
+      if (p > 0) {
+        prices[sizeName] = p;
+      }
+    }
   }
+  
   if (Object.keys(prices).length === 0) {
     toast('กรุณาใส่ราคาอย่างน้อย 1 ขนาด', 'error');
     return;
@@ -1011,12 +1109,21 @@ function saveMenuFromModal() {
     catId: ($('fMenuCat') || {}).value || '',
     emoji: ($('fMenuEmoji') || {}).value || '☕',
     prices: prices,
+    sizeActive: sizeActive,
     cost: parseFloat(($('fMenuCost') || {}).value) || 0,
     active: hasClass($('fMenuActive'), 'on'),
     allowDrinkType: allowDrinkType,
     availableDrinkTypes: availDrinkTypes,
     allowSweetLevel: hasClass($('fMenuAllowSweet'), 'on')
   };
+  
+  /* ===== บันทึกรูปเมนู (เฉพาะ Pro) ===== */
+  if (typeof FeatureManager !== 'undefined' && FeatureManager.isEnabled('pro_menu_image')) {
+    var imageUrl = ($('fMenuImage') || {}).value.trim();
+    if (imageUrl) {
+      data.image = imageUrl;
+    }
+  }
 
   if (id) {
     ST.updateMenuItem(id, data);
@@ -1176,30 +1283,103 @@ function deleteTpFromModal() {
 }
 
 /* ============================================
-   MODAL: STOCK ITEM
+   MODAL: STOCK ITEM (พร้อมหน่วยใหญ่)
    ============================================ */
 function modalEditStock(item) {
   var isNew = !item;
   var s = item || {};
 
+  /* คำนวณค่าสำหรับแสดงผล */
+  var bigQty = 0;
+  var smallQty = 0;
+  var bigUnitSize = s.bigUnitSize || 0;
+  var totalQty = s.qty || 0;
+  
+  if (bigUnitSize > 0 && s.bigUnit) {
+    bigQty = Math.floor(totalQty / bigUnitSize);
+    smallQty = totalQty % bigUnitSize;
+  }
+
+  var stockCats = ST.getStockCategories();
+
   var html = '';
   html += '<div class="form-group">';
   html += '<label class="form-label">ชื่อวัตถุดิบ *</label>';
-  html += '<input type="text" id="fStkName" value="' + sanitize(s.name || '') + '" placeholder="เช่น เมล็ดกาแฟ">';
+  html += '<input type="text" id="fStkName" value="' + sanitize(s.name || '') + '" placeholder="เช่น เมล็ดกาแฟ, ถุงพลาสติก">';
   html += '</div>';
+  
+  /* หมวดหมู่ */
+  html += '<div class="form-group">';
+  html += '<label class="form-label">หมวดหมู่</label>';
+  html += '<select id="fStkCategory">';
+  html += '<option value="">-- ไม่ระบุหมวดหมู่ --</option>';
+  for (var i = 0; i < stockCats.length; i++) {
+    var selected = (s.categoryId === stockCats[i].id) ? ' selected' : '';
+    html += '<option value="' + stockCats[i].id + '"' + selected + '>' + (stockCats[i].icon || '📦') + ' ' + sanitize(stockCats[i].name) + '</option>';
+  }
+  html += '</select>';
+  html += '</div>';
+  
+  /* หน่วยย่อย + หน่วยใหญ่ */
   html += '<div class="form-row">';
-  html += '<div class="form-group"><label class="form-label">หน่วย</label>';
-  html += '<input type="text" id="fStkUnit" value="' + sanitize(s.unit || '') + '" placeholder="g, ml, ชิ้น"></div>';
-  html += '<div class="form-group"><label class="form-label">คงเหลือ</label>';
-  html += '<input type="number" id="fStkQty" value="' + (s.qty || '') + '" placeholder="0" inputmode="numeric"></div>';
+  html += '<div class="form-group"><label class="form-label">หน่วยย่อย</label>';
+  html += '<input type="text" id="fStkUnit" value="' + sanitize(s.unit || '') + '" placeholder="ml, g, ใบ, ชิ้น"></div>';
+  html += '<div class="form-group"><label class="form-label">หน่วยใหญ่ (optional)</label>';
+  html += '<input type="text" id="fStkBigUnit" value="' + sanitize(s.bigUnit || '') + '" placeholder="เช่น กล่อง, แพ็ค, ถุง"></div>';
   html += '</div>';
+  
+  /* ขนาดต่อหน่วยใหญ่ */
   html += '<div class="form-row">';
-  html += '<div class="form-group"><label class="form-label">แจ้งเตือนเมื่อเหลือ</label>';
-  html += '<input type="number" id="fStkMin" value="' + (s.minQty || '') + '" placeholder="0" inputmode="numeric"></div>';
-  html += '<div class="form-group"><label class="form-label">ต้นทุน/หน่วย (฿)</label>';
-  html += '<input type="number" id="fStkCost" value="' + (s.costPerUnit || '') + '" placeholder="0" step="0.01" inputmode="decimal"></div>';
+  html += '<div class="form-group"><label class="form-label">1 หน่วยใหญ่ =</label>';
+  html += '<input type="number" id="fStkBigUnitSize" value="' + (s.bigUnitSize || '') + '" placeholder="1000" step="1" oninput="updateStockTotalQty()"></div>';
+  html += '<div class="form-group"><label class="form-label" style="visibility:hidden;">.</label>';
+  html += '<input type="text" id="fStkBigUnitDisplay" value="' + sanitize(s.unit || '') + '" readonly style="background:transparent;border:none;font-weight:600;" disabled></div>';
   html += '</div>';
+  
+  /* จำนวนคงเหลือ (แยกหน่วยใหญ่ + หน่วยย่อย) */
+  html += '<div class="form-group">';
+  html += '<label class="form-label">จำนวนคงเหลือ</label>';
+  html += '<div class="form-row">';
+  html += '<div class="form-group"><input type="number" id="fStkBigQty" value="' + bigQty + '" placeholder="0" step="1" oninput="updateStockTotalQty()"></div>';
+  if (s.bigUnit) {
+    html += '<div class="form-group"><input type="text" value="' + sanitize(s.bigUnit) + '" readonly style="background:transparent;border:none;font-weight:600;"></div>';
+  } else {
+    html += '<div class="form-group"><input type="text" value="หน่วยใหญ่" readonly disabled style="background:transparent;border:none;"></div>';
+  }
+  html += '<div class="form-group"><input type="number" id="fStkSmallQty" value="' + smallQty + '" placeholder="0" step="1" oninput="updateStockTotalQty()"></div>';
+  html += '<div class="form-group"><input type="text" id="fStkUnitDisplay" value="' + sanitize(s.unit || '') + '" readonly style="background:transparent;border:none;font-weight:600;"></div>';
+  html += '</div>';
+  html += '</div>';
+  
+  /* คงเหลือรวม (หน่วยย่อย) - readonly */
+  html += '<div class="form-group">';
+  html += '<label class="form-label">คงเหลือรวม (หน่วยย่อย)</label>';
+  html += '<input type="number" id="fStkTotalQty" value="' + (s.qty || 0) + '" readonly style="background:var(--bg-input);opacity:0.8;">';
+  html += '</div>';
+  
+  /* ราคาต่อหน่วยใหญ่ */
+  html += '<div class="form-group">';
+  html += '<label class="form-label">ราคาต่อหน่วยใหญ่ (฿)</label>';
+  html += '<input type="number" id="fStkBigPrice" value="' + ((s.costPerUnit || 0) * (s.bigUnitSize || 1)).toFixed(2) + '" placeholder="0" step="0.01" oninput="updateStockCostAuto()">';
+  html += '</div>';
+  
+  /* ต้นทุน/หน่วยย่อย (คำนวณอัตโนมัติ) */
+  html += '<div class="form-group">';
+  html += '<label class="form-label">ต้นทุน/หน่วยย่อย (฿) - คำนวณอัตโนมัติ</label>';
+  html += '<input type="number" id="fStkCostAuto" value="' + (s.costPerUnit || 0).toFixed(4) + '" step="0.0001" readonly style="background:var(--bg-input);">';
+  html += '</div>';
+  
+  /* แจ้งเตือน */
+  html += '<div class="form-group">';
+  html += '<label class="form-label">แจ้งเตือนเมื่อเหลือ (หน่วยย่อย)</label>';
+  html += '<input type="number" id="fStkMin" value="' + (s.minQty || 0) + '" placeholder="0" step="1">';
+  html += '</div>';
+  
+  html += '<div class="form-hint">💡 ถ้ากรอกหน่วยใหญ่ ระบบจะแสดงผลเป็น "X กล่อง Y ml" อัตโนมัติ</div>';
+  
   html += '<input type="hidden" id="fStkId" value="' + sanitize(s.id || '') + '">';
+  html += '<input type="hidden" id="fStkOldUnit" value="' + sanitize(s.unit || '') + '">';
+  html += '<input type="hidden" id="fStkOldBigUnit" value="' + sanitize(s.bigUnit || '') + '">';
 
   var footer = '';
   if (!isNew) footer += '<button class="btn btn-danger btn-sm" onclick="deleteStkFromModal()">🗑 ลบ</button>';
@@ -1207,21 +1387,45 @@ function modalEditStock(item) {
   footer += '<button class="btn btn-primary" onclick="saveStkFromModal()">' + (isNew ? '➕ เพิ่ม' : '💾 บันทึก') + '</button>';
 
   openModal(isNew ? '➕ เพิ่มวัตถุดิบ' : '✏️ แก้ไขวัตถุดิบ', html, footer);
+
+  initStockModalCalculations();
 }
 
 function saveStkFromModal() {
   var id = ($('fStkId') || {}).value;
   var name = ($('fStkName') || {}).value.trim();
   if (!name) { toast('กรุณาใส่ชื่อ', 'error'); return; }
+  
+  var unit = ($('fStkUnit') || {}).value.trim();
+  var bigUnit = ($('fStkBigUnit') || {}).value.trim();
+  var bigUnitSize = parseFloat(($('fStkBigUnitSize') || {}).value) || 0;
+  var totalQty = parseFloat(($('fStkTotalQty') || {}).value) || 0;
+  var costPerUnit = parseFloat(($('fStkCostAuto') || {}).value) || 0;
+  var minQty = parseFloat(($('fStkMin') || {}).value) || 0;
+  var categoryId = ($('fStkCategory') || {}).value;
+  
   var data = {
     name: name,
-    unit: ($('fStkUnit') || {}).value.trim() || 'ชิ้น',
-    qty: parseFloat(($('fStkQty') || {}).value) || 0,
-    minQty: parseFloat(($('fStkMin') || {}).value) || 0,
-    costPerUnit: parseFloat(($('fStkCost') || {}).value) || 0
+    unit: unit || 'ชิ้น',
+    qty: totalQty,
+    minQty: minQty,
+    costPerUnit: costPerUnit,
+    bigUnit: bigUnit,
+    bigUnitSize: bigUnitSize
   };
-  if (id) { ST.updateStockItem(id, data); toast('อัพเดตแล้ว', 'success'); }
-  else { ST.addStockItem(data); toast('เพิ่มแล้ว', 'success'); }
+  
+  if (categoryId) {
+    data.categoryId = categoryId;
+  }
+  
+  if (id) { 
+    ST.updateStockItem(id, data); 
+    toast('อัพเดตแล้ว', 'success'); 
+  } else { 
+    ST.addStockItem(data); 
+    toast('เพิ่มแล้ว', 'success'); 
+  }
+  
   closeMForce();
   if (typeof renderStockView === 'function') renderStockView();
 }
@@ -1238,6 +1442,51 @@ function deleteStkFromModal() {
 }
 
 /* ============================================
+   STOCK CALCULATION FUNCTIONS
+   ============================================ */
+function updateStockTotalQty() {
+  var bigQtyInput = $('fStkBigQty');
+  var smallQtyInput = $('fStkSmallQty');
+  var bigUnitSizeInput = $('fStkBigUnitSize');
+  var totalQtyInput = $('fStkTotalQty');
+  
+  if (!bigQtyInput || !smallQtyInput || !bigUnitSizeInput || !totalQtyInput) return;
+  
+  var bigQty = parseFloat(bigQtyInput.value) || 0;
+  var smallQty = parseFloat(smallQtyInput.value) || 0;
+  var bigUnitSize = parseFloat(bigUnitSizeInput.value) || 0;
+  
+  var totalQty = (bigQty * bigUnitSize) + smallQty;
+  totalQtyInput.value = totalQty;
+  
+  updateStockCostAuto();
+}
+
+function updateStockCostAuto() {
+  var bigPriceInput = $('fStkBigPrice');
+  var bigUnitSizeInput = $('fStkBigUnitSize');
+  var costAutoInput = $('fStkCostAuto');
+  
+  if (!bigPriceInput || !bigUnitSizeInput || !costAutoInput) return;
+  
+  var bigPrice = parseFloat(bigPriceInput.value) || 0;
+  var bigUnitSize = parseFloat(bigUnitSizeInput.value) || 0;
+  
+  if (bigUnitSize > 0) {
+    var unitCost = bigPrice / bigUnitSize;
+    costAutoInput.value = unitCost.toFixed(4);
+  } else {
+    costAutoInput.value = bigPrice.toFixed(4);
+  }
+}
+
+function initStockModalCalculations() {
+  setTimeout(function() {
+    updateStockTotalQty();
+  }, 150);
+}
+
+/* ============================================
    MODAL: STOCK ADJUST
    ============================================ */
 function modalStockAdjust(item, type) {
@@ -1247,7 +1496,8 @@ function modalStockAdjust(item, type) {
   var html = '';
   html += '<div class="text-center mb-16">';
   html += '<div class="fw-700 fs-lg">' + sanitize(item.name) + '</div>';
-  html += '<div class="text-muted">คงเหลือ: ' + formatMoney(item.qty) + ' ' + sanitize(item.unit) + '</div>';
+  var displayQty = formatStockQty(item.qty, item.unit, item.bigUnit, item.bigUnitSize);
+  html += '<div class="text-muted">คงเหลือ: ' + displayQty + '</div>';
   html += '</div>';
   html += '<div class="form-group">';
   html += '<label class="form-label">จำนวน (' + sanitize(item.unit) + ')</label>';
@@ -1364,41 +1614,163 @@ function cancelOrderFromModal(orderId) {
 function modalEditStaff(staff) {
   var isNew = !staff;
   var s = staff || {};
-
+  var isManager = (APP.currentStaff && APP.currentStaff.role === 'manager');
+  var customPerms = s.customPermissions || {};
+  
+  /* รายการเมนูทั้งหมด */
+  var allMenus = [
+    { id: 'pos', name: '🛒 POS', default: true },
+    { id: 'menu', name: '📋 จัดการเมนู', default: false },
+    { id: 'orders', name: '📜 ออเดอร์', default: true },
+    { id: 'report', name: '📊 รายงาน', default: false },
+    { id: 'stock', name: '📦 Stock', default: false },
+    { id: 'staff', name: '👥 พนักงาน', default: false },
+    { id: 'members', name: '👤 สมาชิก', default: false },
+    { id: 'recipe', name: '🧪 สูตรวัตถุดิบ', default: false },
+    { id: 'admin', name: '⚙️ ตั้งค่า', default: false }
+  ];
+  
   var html = '';
-  html += '<div class="form-group"><label class="form-label">ชื่อ *</label>';
-  html += '<input type="text" id="fStaffName" value="' + sanitize(s.name || '') + '" placeholder="สมชาย"></div>';
-  html += '<div class="form-group"><label class="form-label">PIN 4 หลัก *</label>';
-  html += '<input type="password" id="fStaffPin" value="' + sanitize(s.pin || '') + '" placeholder="0000" maxlength="4" inputmode="numeric" style="font-size:24px;text-align:center;letter-spacing:12px;"></div>';
-  html += '<div class="form-group"><label class="form-label">ตำแหน่ง</label><select id="fStaffRole">';
+  
+  /* ข้อมูลทั่วไป */
+  html += '<div class="form-group">';
+  html += '<label class="form-label">ชื่อ *</label>';
+  html += '<input type="text" id="fStaffName" value="' + sanitize(s.name || '') + '" placeholder="สมชาย">';
+  html += '</div>';
+  
+  /* รหัสผ่าน */
+  html += '<div class="form-row">';
+  html += '<div class="form-group">';
+  html += '<label class="form-label">' + (isNew ? 'PIN 4 หลัก *' : 'PIN ใหม่ (เว้นว่างถ้าไม่เปลี่ยน)') + '</label>';
+  html += '<input type="password" id="fStaffPin" value="" placeholder="0000" maxlength="4" inputmode="numeric" style="font-size:20px;text-align:center;">';
+  html += '</div>';
+  html += '<div class="form-group">';
+  html += '<label class="form-label">ยืนยัน PIN</label>';
+  html += '<input type="password" id="fStaffConfirmPin" value="" placeholder="0000" maxlength="4" inputmode="numeric" style="font-size:20px;text-align:center;">';
+  html += '</div>';
+  html += '</div>';
+  
+  html += '<div class="form-group">';
+  html += '<label class="form-label">ตำแหน่ง</label>';
+  html += '<select id="fStaffRole">';
   html += '<option value="cashier"' + (s.role === 'cashier' ? ' selected' : '') + '>แคชเชียร์</option>';
   html += '<option value="barista"' + (s.role === 'barista' ? ' selected' : '') + '>บาริสต้า</option>';
   html += '<option value="manager"' + (s.role === 'manager' ? ' selected' : '') + '>ผู้จัดการ</option>';
-  html += '</select></div>';
-  html += '<div class="form-group"><label class="toggle-wrap" onclick="toggleToggle(this)">';
+  html += '</select>';
+  html += '</div>';
+  
+  /* สิทธิ์การเข้าถึงเมนู (เฉพาะ manager เท่านั้นที่ตั้งได้) */
+  if (isManager && s.role !== 'manager') {
+    html += '<div class="card p-16 mt-16" style="border-color:var(--accent2);">';
+    html += '<div class="fw-700 mb-8">🔐 สิทธิ์การเข้าถึงเมนู</div>';
+    html += '<div class="text-muted fs-sm mb-12">เลือกเมนูที่พนักงานคนนี้สามารถเข้าได้</div>';
+    
+    for (var i = 0; i < allMenus.length; i++) {
+      var menu = allMenus[i];
+      var isChecked = (customPerms[menu.id] !== undefined) ? customPerms[menu.id] : menu.default;
+      html += '<label class="checkbox-wrap" style="margin-bottom:8px;">';
+      html += '<input type="checkbox" class="staff-permission-chk" data-view="' + menu.id + '" ' + (isChecked ? 'checked' : '') + '>';
+      html += '<span>' + menu.name + '</span>';
+      html += '</label>';
+    }
+    
+    html += '</div>';
+  }
+  
+  html += '<div class="form-group mt-8">';
+  html += '<label class="toggle-wrap" onclick="toggleToggle(this)">';
   html += '<div class="toggle' + (s.active !== false ? ' on' : '') + '" id="fStaffActive"></div>';
-  html += '<span>เปิดใช้งาน</span></label></div>';
+  html += '<span>เปิดใช้งาน</span>';
+  html += '</label>';
+  html += '</div>';
+  
   html += '<input type="hidden" id="fStaffId" value="' + sanitize(s.id || '') + '">';
-
+  
   var footer = '';
-  if (!isNew) footer += '<button class="btn btn-danger btn-sm" onclick="deleteStaffFromModal()">🗑 ลบ</button>';
+  if (!isNew && isManager) footer += '<button class="btn btn-danger btn-sm" onclick="deleteStaffFromModal()">🗑 ลบ</button>';
   footer += '<button class="btn btn-secondary" onclick="closeMForce()">ยกเลิก</button>';
   footer += '<button class="btn btn-primary" onclick="saveStaffFromModal()">' + (isNew ? '➕ เพิ่ม' : '💾 บันทึก') + '</button>';
-
-  openModal(isNew ? '➕ เพิ่มพนักงาน' : '✏️ แก้ไข', html, footer);
+  
+  openModal(isNew ? '➕ เพิ่มพนักงาน' : '✏️ แก้ไขพนักงาน', html, footer);
 }
 
 function saveStaffFromModal() {
   var id = ($('fStaffId') || {}).value;
   var name = ($('fStaffName') || {}).value.trim();
-  var pin = ($('fStaffPin') || {}).value.trim();
+  var newPin = ($('fStaffPin') || {}).value.trim();
+  var confirmPin = ($('fStaffConfirmPin') || {}).value.trim();
+  
   if (!name) { toast('กรุณาใส่ชื่อ', 'error'); return; }
-  if (!pin || pin.length !== 4) { toast('กรุณาใส่ PIN 4 หลัก', 'error'); return; }
-  var data = { name: name, pin: pin, role: ($('fStaffRole') || {}).value || 'cashier', active: hasClass($('fStaffActive'), 'on') };
-  if (id) { ST.updateStaff(id, data); toast('อัพเดตแล้ว', 'success'); }
-  else { ST.addStaff(data); toast('เพิ่มแล้ว', 'success'); }
+  
+  if (newPin) {
+    if (newPin.length !== 4) { toast('PIN ต้อง 4 หลัก', 'error'); return; }
+    if (newPin !== confirmPin) { toast('รหัสไม่ตรงกัน', 'error'); return; }
+  } else if (!id) {
+    toast('กรุณาใส่ PIN', 'error');
+    return;
+  }
+  
+  var role = ($('fStaffRole') || {}).value || 'cashier';
+  var active = hasClass($('fStaffActive'), 'on');
+  var customPermissions = {};
+  
+  /* บันทึก custom permissions */
+  var permCheckboxes = qsa('.staff-permission-chk');
+  for (var i = 0; i < permCheckboxes.length; i++) {
+    var view = permCheckboxes[i].getAttribute('data-view');
+    customPermissions[view] = permCheckboxes[i].checked;
+  }
+  
+  var data = { 
+    name: name, 
+    role: role, 
+    active: active
+  };
+  
+  if (newPin) data.pin = newPin;
+  if (Object.keys(customPermissions).length > 0) data.customPermissions = customPermissions;
+  
+  if (id) { 
+    /* ถ้าไม่เปลี่ยนรหัส ต้องเก็บรหัสเดิม */
+    if (!newPin) {
+      var existing = findById(ST.getStaff(), id);
+      if (existing) data.pin = existing.pin;
+    }
+    ST.updateStaff(id, data); 
+    toast('อัพเดตพนักงานแล้ว', 'success'); 
+  } else { 
+    ST.addStaff(data); 
+    toast('เพิ่มพนักงานแล้ว', 'success'); 
+  }
+  
   closeMForce();
-  if (typeof renderAdminView === 'function') renderAdminView();
+  
+  /* อัปเดต sidebar */
+  if (typeof updateSidebarByStaffPermission === 'function') {
+    updateSidebarByStaffPermission();
+  }
+  
+  if (typeof renderStaffView === 'function') {
+    renderStaffView();
+  } else {
+    nav('staff');
+  }
+}
+
+/* รีเซ็ตรหัสพนักงาน (Manager เท่านั้น) */
+function resetStaffPassword(staffId) {
+  var newPin = prompt('รหัสใหม่ 4 หลัก:', '0000');
+  if (!newPin || newPin.length !== 4) {
+    toast('PIN ต้อง 4 หลัก', 'error');
+    return;
+  }
+  
+  confirmDialog('รีเซ็ตรหัสพนักงานคนนี้?', function() {
+    ST.updateStaff(staffId, { pin: newPin });
+    toast('รีเซ็ตรหัสสำเร็จ', 'success');
+    closeMForce();
+    if (typeof renderStaffView === 'function') renderStaffView();
+  });
 }
 
 function deleteStaffFromModal() {
@@ -1408,10 +1780,14 @@ function deleteStaffFromModal() {
     ST.deleteStaff(id);
     closeMForce();
     toast('ลบแล้ว', 'warning');
-    if (typeof renderAdminView === 'function') renderAdminView();
+    /* redirect ไปหน้า staff */
+    if (typeof renderStaffView === 'function') {
+      renderStaffView();
+    } else {
+      nav('staff');
+    }
   });
 }
-
 /* ============================================
    TOGGLE HELPER
    ============================================ */
